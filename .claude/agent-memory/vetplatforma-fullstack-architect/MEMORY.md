@@ -1,0 +1,5 @@
+- [User Profile](user_profile.md) — founder/lead dev, owns full stack, fast-iteration style
+- [Stripe Integration](stripe_integration.md) — API version, lazy init pattern, webhook handler location
+- [Suspense Pattern](suspense_useSearchParams.md) — useSearchParams must be wrapped in Suspense boundary
+- [Middleware Deprecation](middleware_deprecation.md) — Next.js 16 renamed middleware → proxy (warning, not breaking)
+- [Subscription Gating](subscription_gating.md) — 30-day trial gating logic in middleware, redirect to /dashboard/upgrade
