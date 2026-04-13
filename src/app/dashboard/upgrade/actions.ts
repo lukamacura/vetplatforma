@@ -36,10 +36,10 @@ export async function createCheckoutSession(): Promise<void> {
 
   // Fetch clinic via service role (stripe_customer_id not accessible via RLS-scoped client)
   const { data: clinic } = await serviceClient
-    .from("clinics").select("name, stripe_customer_id, trial_started_at").eq("id", clinicId).single()
+    .from("clinics").select("name, stripe_customer_id").eq("id", clinicId).single()
   if (!clinic) redirect("/dashboard")
 
-  let customerId = clinic.stripe_customer_id as string | null
+  let customerId = (clinic as { stripe_customer_id: string | null }).stripe_customer_id
 
   // Create Stripe customer if not exists yet
   if (!customerId) {
@@ -57,20 +57,12 @@ export async function createCheckoutSession(): Promise<void> {
 
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
-  // If the clinic still has trial days remaining, tell Stripe to start billing
-  // only after the trial ends — so current_period_end = trial_end + 30 days.
-  const trialStartedAt = (clinic as { trial_started_at?: string | null }).trial_started_at
-  const trialEnd = trialStartedAt ? new Date(trialStartedAt) : null
-  if (trialEnd) trialEnd.setDate(trialEnd.getDate() + 30)
-  const trialEndUnix = trialEnd && trialEnd > new Date() ? Math.floor(trialEnd.getTime() / 1000) : undefined
-
   const session = await stripe.checkout.sessions.create({
     customer:    customerId,
     mode:        "subscription",
     line_items:  [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
     success_url: `${origin}/dashboard?subscribed=1`,
     cancel_url:  `${origin}/dashboard/upgrade`,
-    ...(trialEndUnix ? { subscription_data: { trial_end: trialEndUnix } } : {}),
   })
 
   redirect(session.url!)

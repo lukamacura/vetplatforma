@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.updated": {
       const sub        = event.data.object as Stripe.Subscription
       const customerId = sub.customer as string
-      const periodEnd  = new Date(sub.items.data[0].current_period_end * 1000).toISOString()
+      const itemPeriodEnd = sub.items.data[0]?.current_period_end
+      const periodEnd  = itemPeriodEnd ? new Date(itemPeriodEnd * 1000).toISOString() : null
 
       let status: "trial" | "active" | "expired" | "cancelled"
       if (sub.status === "trialing")                                          status = "trial"
