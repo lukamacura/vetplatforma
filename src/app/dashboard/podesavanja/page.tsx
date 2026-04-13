@@ -41,7 +41,6 @@ export default function PodesavanjaPage() {
   const [hours,               setHours]               = useState<HoursRow[]>(DEFAULT_HOURS)
   const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
   const [planExpiry,          setPlanExpiry]          = useState<string | null>(null)
-  const [isPaidTrial,         setIsPaidTrial]         = useState(false)
 
   const [savingClinic, setSavingClinic] = useState(false)
   const [savingPhone,  setSavingPhone]  = useState(false)
@@ -81,13 +80,9 @@ export default function PodesavanjaPage() {
         setClinicSlug(c.slug)
         const status = c.subscription_status ?? "trial"
         setSubscriptionStatus(status)
-        if (status === "trial" && c.subscription_current_period_end) {
-          // Card collected — subscription starts when trial ends
-          setIsPaidTrial(true)
+        if (status === "active" && c.subscription_current_period_end) {
           setPlanExpiry(new Date(c.subscription_current_period_end).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
-        } else if (status === "active" && c.subscription_current_period_end) {
-          setPlanExpiry(new Date(c.subscription_current_period_end).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
-        } else if (c.trial_started_at) {
+        } else if (status === "trial" && c.trial_started_at) {
           const exp = new Date(c.trial_started_at)
           exp.setDate(exp.getDate() + 30)
           setPlanExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
@@ -240,16 +235,6 @@ export default function PodesavanjaPage() {
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
                   )}
                 </>
-              ) : isPaidTrial ? (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 size={14} strokeWidth={2.5} style={{ color: "var(--brand)" }} />
-                    <span className="text-base" style={{ fontWeight: 700, color: "var(--brand)" }}>Pretplata zakazana</span>
-                  </div>
-                  {planExpiry && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Naplaćuje se: {planExpiry}</p>
-                  )}
-                </>
               ) : (
                 <>
                   <span className="text-base" style={{ fontWeight: 700, color: "var(--brand)" }}>Probni period</span>
@@ -261,7 +246,7 @@ export default function PodesavanjaPage() {
             </div>
           </div>
 
-          {subscriptionStatus !== "active" && !isPaidTrial && (
+          {subscriptionStatus !== "active" && (
             <form action={() => startTransition(() => createCheckoutSession())}>
               <button
                 type="submit"

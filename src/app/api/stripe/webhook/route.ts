@@ -14,6 +14,37 @@ function getServiceClient() {
   )
 }
 
+function mapSubStatus(stripeStatus: string): "trial" | "active" | "expired" | "cancelled" {
+  if (stripeStatus === "trialing")  return "trial"
+  if (stripeStatus === "active")    return "active"
+  if (stripeStatus === "canceled")  return "cancelled"
+  return "expired"
+}
+
+async function syncSubscription(stripe: Stripe, supabase: ReturnType<typeof getServiceClient>, sub: Stripe.Subscription) {
+  const customerId = sub.customer as string
+
+  // items.data may be empty in webhook payloads — fetch full subscription if needed
+  let periodEndSec: number | undefined
+  if (sub.items.data.length > 0) {
+    periodEndSec = sub.items.data[0].current_period_end
+  } else {
+    const full = await stripe.subscriptions.retrieve(sub.id, { expand: ["items"] })
+    periodEndSec = full.items.data[0]?.current_period_end
+  }
+
+  const periodEnd = periodEndSec ? new Date(periodEndSec * 1000).toISOString() : null
+  const status    = mapSubStatus(sub.status)
+
+  await supabase
+    .from("clinics")
+    .update({
+      subscription_status:             status,
+      subscription_current_period_end: periodEnd,
+    })
+    .eq("stripe_customer_id", customerId)
+}
+
 export async function POST(req: NextRequest) {
   const stripe  = getStripe()
   const rawBody = await req.text()
@@ -29,26 +60,19 @@ export async function POST(req: NextRequest) {
   const supabase = getServiceClient()
 
   switch (event.type) {
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session
+      if (session.mode === "subscription" && session.subscription) {
+        const subId = typeof session.subscription === "string" ? session.subscription : session.subscription.id
+        const sub   = await stripe.subscriptions.retrieve(subId, { expand: ["items"] })
+        await syncSubscription(stripe, supabase, sub)
+      }
+      break
+    }
     case "customer.subscription.created":
     case "customer.subscription.updated": {
-      const sub        = event.data.object as Stripe.Subscription
-      const customerId = sub.customer as string
-      const itemPeriodEnd = sub.items.data[0]?.current_period_end
-      const periodEnd  = itemPeriodEnd ? new Date(itemPeriodEnd * 1000).toISOString() : null
-
-      let status: "trial" | "active" | "expired" | "cancelled"
-      if (sub.status === "trialing")                                          status = "trial"
-      else if (sub.status === "active")                                       status = "active"
-      else if (sub.status === "canceled")                                     status = "cancelled"
-      else /* past_due | unpaid | paused | incomplete | incomplete_expired */ status = "expired"
-
-      await supabase
-        .from("clinics")
-        .update({
-          subscription_status:             status,
-          subscription_current_period_end: periodEnd,
-        })
-        .eq("stripe_customer_id", customerId)
+      const sub = event.data.object as Stripe.Subscription
+      await syncSubscription(stripe, supabase, sub)
       break
     }
     case "customer.subscription.deleted": {

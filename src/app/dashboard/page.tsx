@@ -117,7 +117,7 @@ function AppointmentRow({
       }}
     >
       {/* Time column */}
-      <div className="w-[52px] shrink-0 text-center">
+      <div className="w-13 shrink-0 text-center">
         <span className="text-sm tabular-nums leading-none" style={{ color: timeColor, fontWeight: 700 }}>
           {formatTime(appt.scheduled_at)}
         </span>
