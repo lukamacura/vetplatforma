@@ -196,8 +196,73 @@ export default function PodesavanjaPage() {
         </div>
       </motion.div>
 
-      {/* Section 1 — Clinic name */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.24 }} className="solid-card rounded-2xl p-6">
+      {/* Section 1 — Subscription / Plan */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.24 }}
+        className="rounded-2xl p-5"
+        style={{
+          background: subscriptionStatus === "active"
+            ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.04) 100%)"
+            : subscriptionStatus === "expired" || subscriptionStatus === "cancelled"
+              ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.04) 100%)"
+              : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.04) 100%)",
+          border: `1px solid ${subscriptionStatus === "active" ? "rgba(22,163,74,0.2)" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "rgba(220,38,38,0.2)" : "rgba(43,181,160,0.25)"}`,
+        }}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className={`icon-md shrink-0 ${subscriptionStatus === "active" ? "icon-green" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "icon-red" : "icon-brand"}`}>
+              <CreditCard size={18} strokeWidth={1.75} />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
+                VetPlatforma Pro · €49/mesec
+              </p>
+              {subscriptionStatus === "active" ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 size={14} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                    <span className="text-base" style={{ fontWeight: 700, color: "var(--green)" }}>Pretplata aktivna</span>
+                  </div>
+                  {planExpiry && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Sledeće plaćanje: {planExpiry}</p>
+                  )}
+                </>
+              ) : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? (
+                <>
+                  <span className="text-base" style={{ fontWeight: 700, color: "var(--red)" }}>Pretplata istekla</span>
+                  {planExpiry && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className="text-base" style={{ fontWeight: 700, color: "var(--brand)" }}>Probni period</span>
+                  {planExpiry && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Ističe: {planExpiry}</p>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {subscriptionStatus !== "active" && (
+            <form action={() => startTransition(() => createCheckoutSession())}>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-xl px-5 py-2.5 text-sm text-white shrink-0 transition-opacity"
+                style={{ background: "var(--brand)", fontWeight: 700, opacity: isPending ? 0.7 : 1 }}
+              >
+                {isPending ? "Preusmeravanje..." : "Aktiviraj pretplatu"}
+              </button>
+            </form>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Section 2 — Clinic name */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10, duration: 0.24 }} className="solid-card rounded-2xl p-6">
         <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Naziv klinike</h2>
         <form onSubmit={handleSaveClinic} className="space-y-3">
           <div className="space-y-1.5">
@@ -228,7 +293,7 @@ export default function PodesavanjaPage() {
         </form>
       </motion.div>
 
-      {/* Section 2 — Invite link */}
+      {/* Section 3 — Invite link */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.24 }} className="solid-card rounded-2xl p-6">
         <h2 className="text-sm mb-1" style={{ fontWeight: 700 }}>Link za poziv vlasnika</h2>
         <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
@@ -294,60 +359,6 @@ export default function PodesavanjaPage() {
             )}
           </div>
         </form>
-      </motion.div>
-
-      {/* Section 4 — Subscription / Plan */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.24 }} className="solid-card rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <div className={`icon-sm ${subscriptionStatus === "active" ? "icon-green" : subscriptionStatus === "expired" ? "icon-muted" : "icon-amber"}`}>
-            <CreditCard size={14} strokeWidth={2} />
-          </div>
-          <h2 className="text-sm" style={{ fontWeight: 700 }}>Plan i pretplata</h2>
-        </div>
-
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            {subscriptionStatus === "active" ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 size={16} strokeWidth={2} style={{ color: "var(--green)" }} />
-                  <span className="text-sm" style={{ fontWeight: 600, color: "var(--green)" }}>Pretplata aktivna</span>
-                </div>
-                {planExpiry && (
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Sledeće plaćanje: {planExpiry}</p>
-                )}
-              </>
-            ) : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? (
-              <>
-                <span className="text-sm" style={{ fontWeight: 600, color: "var(--red)" }}>Pretplata istekla</span>
-                {planExpiry && (
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="text-sm" style={{ fontWeight: 600, color: "var(--amber)" }}>Probni period</span>
-                {planExpiry && (
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Ističe: {planExpiry}</p>
-                )}
-              </>
-            )}
-            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>VetPlatforma Pro · €49/mesec</p>
-          </div>
-
-          {subscriptionStatus !== "active" && (
-            <form action={() => startTransition(() => createCheckoutSession())}>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded-xl px-5 py-2 text-sm text-white shrink-0 transition-opacity"
-                style={{ background: "var(--brand)", fontWeight: 600, opacity: isPending ? 0.7 : 1 }}
-              >
-                {isPending ? "Preusmeravanje..." : "Aktiviraj pretplatu"}
-              </button>
-            </form>
-          )}
-        </div>
       </motion.div>
 
       {/* Section 5 — Working hours */}
