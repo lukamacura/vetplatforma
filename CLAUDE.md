@@ -80,24 +80,60 @@ Key relationships:
 
 **Font:** Plus Jakarta Sans — loaded via `next/font/google` in `src/app/layout.tsx`, applied through `--font-jakarta` → `--font-sans` CSS variable chain. No fallback font needed.
 
-**Semantic color tokens** (all defined as CSS vars in `src/app/globals.css`):
+### Color tokens (all defined as CSS vars in `src/app/globals.css`)
+
+**Never hardcode hex colors** — always reference a CSS var.
 
 | Token | Hex | Meaning — use only for this |
 |---|---|---|
-| `--brand` | `#2BB5A0` | Primary actions, brand, confirmed/connected state |
-| `--brand-hover` | `#239684` | Hover state for brand elements |
+| `--brand` | `#2BB5A0` | Primary CTAs, brand, confirmed/connected state |
+| `--brand-hover` | `#239684` | Hover on brand elements |
 | `--brand-tint` | `#E6F7F5` | Brand-colored backgrounds |
-| `--green` | `#16A34A` | Healthy / active / success / on-time / "Aktivna" |
-| `--amber` | `#D97706` | Upcoming / due soon / needs attention (within 14 days) |
-| `--red` | `#DC2626` | Overdue / critical / error / expired / destructive toggle |
-| `--blue` | `#2563EB` | Informational / time / duration / neutral data / stats |
+| `--green` | `#16A34A` | Healthy / active / success / on-time |
+| `--amber` | `#D97706` | Upcoming / due soon / needs attention |
+| `--red` | `#DC2626` | Overdue / critical / error / destructive |
+| `--blue` | `#2563EB` | Informational / time / stats / neutral data |
+| `--yellow` | `#EAB308` | Highlights / trial warnings / "new" labels |
+| `--orange` | `#EA580C` | Energy / urgency secondary / onboarding accents |
 
-**Never hardcode hex colors** in components — always reference a CSS var from the table above.
+### CTA Buttons — Glassmorphism style
 
-**Badge classes** (defined in globals.css): `.badge .badge-brand`, `.badge-green`, `.badge-amber`, `.badge-red`, `.badge-blue`, `.badge-muted`
+All primary action buttons use the `.btn-primary` class defined in `globals.css`. Rules:
+- Background: semi-transparent brand color with backdrop blur (glassmorphism).
+- Glow: `box-shadow` using brand color at low opacity, intensifies on hover.
+- Hover: glow intensifies + `scale(1.02)`.
+- Active (click): `scale(0.97)` to simulate physical depress.
+- Transition: `all 0.3s ease` on all interactive states.
+- Never use plain solid-fill buttons for primary actions — always `.btn-primary`.
 
-**Icon container classes**: `.icon-sm` (28px), `.icon-md` (36px), `.icon-lg` (48px) combined with `.icon-brand`, `.icon-green`, `.icon-amber`, `.icon-red`, `.icon-blue`, `.icon-muted`
+```html
+<!-- correct -->
+<button class="btn-primary">Zakaži termin</button>
 
-**Card surfaces**: `.solid-card` (white bg + 1px border) for most cards; `.glass-card` (frosted glass + blur) for sidebar and overlapping surfaces.
+<!-- wrong — no glassmorphism, no glow -->
+<button class="bg-[--brand] text-white rounded-lg px-4 py-2">...</button>
+```
 
-**Pulse animation**: `.pulse-dot` — a small animated dot for urgent badge indicators (overdue status).
+### Card surfaces
+
+| Class | Use |
+|---|---|
+| `.solid-card` | Standard data cards — white bg + 1px border |
+| `.glass-card` | Sidebar, modals, overlapping surfaces — frosted glass + blur |
+| `.glass-card-vibrant` | Feature cards with colored tint — use with `--brand-tint`, `--yellow-tint`, etc. |
+
+### Component classes (defined in globals.css)
+
+**Badges:** `.badge .badge-brand`, `.badge-green`, `.badge-amber`, `.badge-red`, `.badge-blue`, `.badge-yellow`, `.badge-orange`, `.badge-muted`
+
+**Icon containers:** `.icon-sm` (28px) / `.icon-md` (36px) / `.icon-lg` (48px) + `.icon-brand`, `.icon-green`, `.icon-amber`, `.icon-red`, `.icon-blue`, `.icon-yellow`, `.icon-orange`, `.icon-muted`
+
+**Pulse animation:** `.pulse-dot` — animated dot for urgent badge indicators (overdue status).
+
+### Animation conventions
+
+- All interactive elements: `transition: all 0.3s ease`
+- Hover lift on cards: `translateY(-2px)` + softer box-shadow
+- Button hover: `scale(1.02)` + glow intensify
+- Button active: `scale(0.97)` — physical depress feel
+- Never use `transition: none` on user-visible interactive elements

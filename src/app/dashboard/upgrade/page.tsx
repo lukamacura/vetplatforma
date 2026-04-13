@@ -19,7 +19,7 @@ export default function UpgradePage() {
       if (!user) { setLoading(false); return }
 
       const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
-      let clinicId = profile?.clinic_id
+      const clinicId = profile?.clinic_id
       if (!clinicId) {
         const { data: owned } = await supabase.from("clinics").select("id, name, trial_started_at").eq("owner_id", user.id).single()
         if (owned) {

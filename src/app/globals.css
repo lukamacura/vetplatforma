@@ -111,6 +111,22 @@
   --blue-hover:     #1D4ED8;
   --blue-tint:      #DBEAFE;
   --blue-text:      #1E40AF;
+
+  /* ── Yellow — highlights / trial warnings / "new" labels ── */
+  --yellow:         #EAB308;
+  --yellow-hover:   #CA8A04;
+  --yellow-tint:    #FEF9C3;
+  --yellow-text:    #854D0E;
+
+  /* ── Orange — energy / urgency secondary / onboarding accents ── */
+  --orange:         #EA580C;
+  --orange-hover:   #C2410C;
+  --orange-tint:    #FFEDD5;
+  --orange-text:    #9A3412;
+
+  /* ── Brand glow for CTA buttons ── */
+  --brand-glow:     rgba(43, 181, 160, 0.35);
+  --brand-glow-strong: rgba(43, 181, 160, 0.55);
 }
 
 /* ─────────────────────────────────────────
@@ -153,7 +169,7 @@
    UTILITY CLASSES
 ───────────────────────────────────────── */
 
-/* Glass card */
+/* ── Glass card ── */
 .glass-card {
   background: var(--surface-glass);
   backdrop-filter: blur(12px);
@@ -162,13 +178,150 @@
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 4px 16px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
-/* Solid card (no blur needed for most cards) */
+/* Vibrant glass card — for feature cards with a colored tint */
+.glass-card-vibrant {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.glass-card-vibrant:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ── Solid card ── */
 .solid-card {
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.solid-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────
+   PRIMARY CTA BUTTON — Glassmorphism + Glow
+───────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  outline: none;
+
+  /* Glassmorphism fill */
+  background: linear-gradient(
+    135deg,
+    rgba(43, 181, 160, 0.85) 0%,
+    rgba(35, 150, 132, 0.90) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* Resting glow */
+  box-shadow:
+    0 0 0 1px rgba(43, 181, 160, 0.20),
+    0 2px 8px var(--brand-glow),
+    0 4px 20px rgba(43, 181, 160, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+
+  /* Smooth all states */
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(
+    135deg,
+    rgba(43, 181, 160, 0.95) 0%,
+    rgba(35, 150, 132, 1.00) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(43, 181, 160, 0.35),
+    0 4px 16px var(--brand-glow-strong),
+    0 8px 32px rgba(43, 181, 160, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transform: scale(1.02) translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: scale(0.97) translateY(0);
+  box-shadow:
+    0 0 0 1px rgba(43, 181, 160, 0.25),
+    0 1px 4px var(--brand-glow),
+    inset 0 2px 4px rgba(0, 0, 0, 0.10);
+  transition: all 0.1s ease;
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+
+/* ── Destructive CTA variant ── */
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  outline: none;
+  background: linear-gradient(
+    135deg,
+    rgba(220, 38, 38, 0.82) 0%,
+    rgba(185, 28, 28, 0.90) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    0 0 0 1px rgba(220, 38, 38, 0.20),
+    0 2px 8px rgba(220, 38, 38, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+  box-shadow:
+    0 0 0 1px rgba(220, 38, 38, 0.35),
+    0 4px 16px rgba(220, 38, 38, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+  transform: scale(1.02) translateY(-1px);
+}
+
+.btn-danger:active {
+  transform: scale(0.97);
+  transition: all 0.1s ease;
 }
 
 /* ── Status badge system ── */
@@ -184,12 +337,14 @@
   white-space: nowrap;
 }
 
-.badge-brand  { background: var(--brand-tint);  color: var(--brand);     border: 1px solid rgba(43,181,160,0.25); }
-.badge-green  { background: var(--green-tint);  color: var(--green-text); border: 1px solid rgba(22,163,74,0.2);  }
-.badge-amber  { background: var(--amber-tint);  color: var(--amber-text); border: 1px solid rgba(217,119,6,0.2);  }
-.badge-red    { background: var(--red-tint);    color: var(--red-text);   border: 1px solid rgba(220,38,38,0.2);  }
-.badge-blue   { background: var(--blue-tint);   color: var(--blue-text);  border: 1px solid rgba(37,99,235,0.15); }
-.badge-muted  { background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--border); }
+.badge-brand  { background: var(--brand-tint);   color: var(--brand);      border: 1px solid rgba(43,181,160,0.25);  }
+.badge-green  { background: var(--green-tint);   color: var(--green-text); border: 1px solid rgba(22,163,74,0.2);   }
+.badge-amber  { background: var(--amber-tint);   color: var(--amber-text); border: 1px solid rgba(217,119,6,0.2);   }
+.badge-red    { background: var(--red-tint);     color: var(--red-text);   border: 1px solid rgba(220,38,38,0.2);   }
+.badge-blue   { background: var(--blue-tint);    color: var(--blue-text);  border: 1px solid rgba(37,99,235,0.15);  }
+.badge-yellow { background: var(--yellow-tint);  color: var(--yellow-text);border: 1px solid rgba(234,179,8,0.20);  }
+.badge-orange { background: var(--orange-tint);  color: var(--orange-text);border: 1px solid rgba(234,88,12,0.20);  }
+.badge-muted  { background: var(--surface-raised); color: var(--text-muted); border: 1px solid var(--border);      }
 
 /* ── Pulse animation for urgent statuses ── */
 @keyframes dot-pulse {
@@ -211,9 +366,11 @@
 .icon-md  { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
 .icon-lg  { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
 
-.icon-brand  { background: var(--brand-tint);  color: var(--brand);      }
-.icon-green  { background: var(--green-tint);  color: var(--green);      }
-.icon-amber  { background: var(--amber-tint);  color: var(--amber);      }
-.icon-red    { background: var(--red-tint);    color: var(--red);        }
-.icon-blue   { background: var(--blue-tint);   color: var(--blue);       }
-.icon-muted  { background: var(--surface-raised); color: var(--text-muted); }
+.icon-brand   { background: var(--brand-tint);    color: var(--brand);      }
+.icon-green   { background: var(--green-tint);    color: var(--green);      }
+.icon-amber   { background: var(--amber-tint);    color: var(--amber);      }
+.icon-red     { background: var(--red-tint);      color: var(--red);        }
+.icon-blue    { background: var(--blue-tint);     color: var(--blue);       }
+.icon-yellow  { background: var(--yellow-tint);   color: var(--yellow);     }
+.icon-orange  { background: var(--orange-tint);   color: var(--orange);     }
+.icon-muted   { background: var(--surface-raised); color: var(--text-muted); }

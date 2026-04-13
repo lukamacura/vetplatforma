@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { Settings, Copy, Check, Clock } from "lucide-react"
+import { useEffect, useState, useCallback, useTransition } from "react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { createCheckoutSession } from "@/app/dashboard/upgrade/actions"
 import type { ClinicHours } from "@/lib/types"
 
 const WEEKDAYS = [
@@ -33,17 +34,20 @@ const DEFAULT_HOURS: HoursRow[] = WEEKDAYS.map(({ index }) => ({
 }))
 
 export default function PodesavanjaPage() {
-  const [clinicId,   setClinicId]   = useState<string | null>(null)
-  const [clinicSlug, setClinicSlug] = useState("")
-  const [clinicName, setClinicName] = useState("")
-  const [phone,      setPhone]      = useState("")
-  const [hours,      setHours]      = useState<HoursRow[]>(DEFAULT_HOURS)
+  const [clinicId,            setClinicId]            = useState<string | null>(null)
+  const [clinicSlug,          setClinicSlug]          = useState("")
+  const [clinicName,          setClinicName]          = useState("")
+  const [phone,               setPhone]               = useState("")
+  const [hours,               setHours]               = useState<HoursRow[]>(DEFAULT_HOURS)
+  const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
+  const [planExpiry,          setPlanExpiry]          = useState<string | null>(null)
 
   const [savingClinic, setSavingClinic] = useState(false)
   const [savingPhone,  setSavingPhone]  = useState(false)
   const [savingHours,  setSavingHours]  = useState(false)
   const [copied,       setCopied]       = useState(false)
   const [loading,      setLoading]      = useState(true)
+  const [isPending,    startTransition]  = useTransition()
 
   const [clinicMsg, setClinicMsg] = useState<string | null>(null)
   const [phoneMsg,  setPhoneMsg]  = useState<string | null>(null)
@@ -71,14 +75,28 @@ export default function PodesavanjaPage() {
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id, phone").eq("id", user.id).single()
 
+      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null }) {
+        setClinicName(c.name)
+        setClinicSlug(c.slug)
+        const status = c.subscription_status ?? "trial"
+        setSubscriptionStatus(status)
+        if (status === "active" && c.subscription_current_period_end) {
+          setPlanExpiry(new Date(c.subscription_current_period_end).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
+        } else if (c.trial_started_at) {
+          const exp = new Date(c.trial_started_at)
+          exp.setDate(exp.getDate() + 30)
+          setPlanExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
+        }
+      }
+
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, slug").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
-        if (owned) { setClinicName(owned.name); setClinicSlug(owned.slug) }
+        if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, slug").eq("id", cid).single()
-        if (clinic) { setClinicName(clinic.name); setClinicSlug(clinic.slug) }
+        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end").eq("id", cid).single()
+        if (clinic) applyClinic(clinic)
       }
       setPhone(profile?.phone ?? "")
       setClinicId(cid ?? null)
@@ -278,8 +296,62 @@ export default function PodesavanjaPage() {
         </form>
       </motion.div>
 
-      {/* Section 4 — Working hours */}
+      {/* Section 4 — Subscription / Plan */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.24 }} className="solid-card rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <div className={`icon-sm ${subscriptionStatus === "active" ? "icon-green" : subscriptionStatus === "expired" ? "icon-muted" : "icon-amber"}`}>
+            <CreditCard size={14} strokeWidth={2} />
+          </div>
+          <h2 className="text-sm" style={{ fontWeight: 700 }}>Plan i pretplata</h2>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            {subscriptionStatus === "active" ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={16} strokeWidth={2} style={{ color: "var(--green)" }} />
+                  <span className="text-sm" style={{ fontWeight: 600, color: "var(--green)" }}>Pretplata aktivna</span>
+                </div>
+                {planExpiry && (
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Sledeće plaćanje: {planExpiry}</p>
+                )}
+              </>
+            ) : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? (
+              <>
+                <span className="text-sm" style={{ fontWeight: 600, color: "var(--red)" }}>Pretplata istekla</span>
+                {planExpiry && (
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="text-sm" style={{ fontWeight: 600, color: "var(--amber)" }}>Probni period</span>
+                {planExpiry && (
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Ističe: {planExpiry}</p>
+                )}
+              </>
+            )}
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>VetPlatforma Pro · €49/mesec</p>
+          </div>
+
+          {subscriptionStatus !== "active" && (
+            <form action={() => startTransition(() => createCheckoutSession())}>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-xl px-5 py-2 text-sm text-white shrink-0 transition-opacity"
+                style={{ background: "var(--brand)", fontWeight: 600, opacity: isPending ? 0.7 : 1 }}
+              >
+                {isPending ? "Preusmeravanje..." : "Aktiviraj pretplatu"}
+              </button>
+            </form>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Section 5 — Working hours */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22, duration: 0.24 }} className="solid-card rounded-2xl p-6">
         <div className="flex items-center gap-2 mb-5">
           <div className="icon-sm icon-blue">
             <Clock size={14} strokeWidth={2} />

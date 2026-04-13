@@ -4,14 +4,21 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft, Save, Syringe, Stethoscope, Weight,
-  Phone, CalendarDays, FileText, CheckCircle,
+  Phone, CalendarDays, FileText, CheckCircle, History,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
-import type { Pet, Profile } from "@/lib/types"
+import type { Pet, Profile, AppointmentStatus } from "@/lib/types"
+
+type ApptHistoryRow = {
+  id:           string
+  scheduled_at: string
+  status:       AppointmentStatus
+  service_name: string
+}
 
 const SPECIES_LABEL: Record<string, string> = {
   dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
@@ -44,7 +51,7 @@ const STATUS_BADGE: Record<
   overdue: {
     cls: "badge badge-red",
     dot: true,
-    label: (d) => `Isteklo ${new Date(d).toLocaleDateString("en-GB")}`,
+    label: (d) => `Isteklo ${new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
   },
   soon: {
     cls: "badge badge-amber",
@@ -57,7 +64,7 @@ const STATUS_BADGE: Record<
   ok: {
     cls: "badge badge-green",
     dot: false,
-    label: (d) => new Date(d).toLocaleDateString("en-GB"),
+    label: (d) => new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" }),
   },
 }
 
@@ -122,6 +129,7 @@ export default function PetProfilePage() {
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
   const [error,   setError]   = useState<string | null>(null)
+  const [apptHistory, setApptHistory] = useState<ApptHistoryRow[]>([])
 
   const [weightKg,        setWeightKg]        = useState("")
   const [nextVaccineDate, setNextVaccineDate] = useState("")
@@ -149,6 +157,32 @@ export default function PetProfilePage() {
       const { data: ownerData } = await supabase
         .from("profiles").select("*").eq("id", petData.owner_id).single()
       setOwner(ownerData as Profile)
+
+      // Fetch appointment history for this pet
+      const { data: apptData } = await supabase
+        .from("appointments")
+        .select("id, scheduled_at, status, service_id")
+        .eq("pet_id", petId)
+        .order("scheduled_at", { ascending: false })
+        .limit(20)
+
+      if (apptData && apptData.length > 0) {
+        const serviceIds = [...new Set(apptData.map((a: { service_id: string }) => a.service_id))]
+        const { data: svcs } = await supabase
+          .from("services").select("id, name").in("id", serviceIds)
+        const svcMap: Record<string, string> = Object.fromEntries(
+          (svcs ?? []).map((s: { id: string; name: string }) => [s.id, s.name])
+        )
+        setApptHistory(
+          apptData.map((a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string }) => ({
+            id:           a.id,
+            scheduled_at: a.scheduled_at,
+            status:       a.status,
+            service_name: svcMap[a.service_id] ?? "—",
+          }))
+        )
+      }
+
       setLoading(false)
     }
     load()
@@ -285,7 +319,7 @@ export default function PetProfilePage() {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
           {[
             { label: "Rasa",             value: pet.breed     || "-" },
-            { label: "Datum rođenja",    value: pet.birth_date || "-" },
+            { label: "Datum rođenja",    value: pet.birth_date ? new Date(pet.birth_date + "T00:00:00").toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-" },
             { label: "Čip ID",           value: pet.chip_id   || "-", mono: true },
             { label: "Telefon vlasnika", value: owner?.phone  || "-" },
           ].map(({ label, value, mono }) => (
@@ -356,6 +390,40 @@ export default function PetProfilePage() {
           onChange={(e) => setVetNotes(e.target.value)}
         />
       </SectionCard>
+
+      {/* ── Appointment history ── */}
+      {apptHistory.length > 0 && (
+        <SectionCard title="Istorija termina" icon={History} iconClass="icon-blue" delay={0.23}>
+          <div className="space-y-2">
+            {apptHistory.map((appt) => {
+              const d = new Date(appt.scheduled_at)
+              const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })
+              const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
+              const statusBadge =
+                appt.status === "confirmed"
+                  ? { cls: "badge-brand", label: "Potvrđen" }
+                  : appt.status === "cancelled"
+                  ? { cls: "badge-muted", label: "Otkazan" }
+                  : { cls: "badge-red",   label: "Nije došao" }
+              return (
+                <div
+                  key={appt.id}
+                  className="flex items-center gap-3 py-2"
+                  style={{ borderBottom: "1px solid var(--border)" }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate" style={{ fontWeight: 600 }}>{appt.service_name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      {dateStr} · {timeStr}
+                    </p>
+                  </div>
+                  <span className={`badge ${statusBadge.cls} shrink-0`}>{statusBadge.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </SectionCard>
+      )}
 
       {/* ── Save ── */}
       <motion.div

@@ -29,12 +29,18 @@ export async function POST(req: NextRequest) {
   const supabase = getServiceClient()
 
   switch (event.type) {
-    case "customer.subscription.created": {
+    case "customer.subscription.created":
+    case "customer.subscription.updated": {
       const sub        = event.data.object as Stripe.Subscription
       const customerId = sub.customer as string
+      const periodEnd  = new Date(sub.current_period_end * 1000).toISOString()
+      const isActive   = sub.status === "active" || sub.status === "trialing"
       await supabase
         .from("clinics")
-        .update({ subscription_status: "active" })
+        .update({
+          subscription_status:              isActive ? "active" : "expired",
+          subscription_current_period_end:  periodEnd,
+        })
         .eq("stripe_customer_id", customerId)
       break
     }
@@ -43,7 +49,10 @@ export async function POST(req: NextRequest) {
       const customerId = sub.customer as string
       await supabase
         .from("clinics")
-        .update({ subscription_status: "cancelled" })
+        .update({
+          subscription_status:             "cancelled",
+          subscription_current_period_end: null,
+        })
         .eq("stripe_customer_id", customerId)
       break
     }

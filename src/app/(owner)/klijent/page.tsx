@@ -17,7 +17,7 @@ import type { Pet, Appointment } from "@/lib/types"
 
 function formatDateTime(iso: string) {
   const d = new Date(iso)
-  return `${d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+  return `${d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })}`
 }
 
 function canCancel(scheduledAt: string): boolean {

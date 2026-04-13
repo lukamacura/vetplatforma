@@ -141,7 +141,7 @@ function ClientCard({ owner, pets, index }: {
             )}
             <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>
               od{" "}
-              {new Date(owner.connected_at).toLocaleDateString("en-GB")}
+              {new Date(owner.connected_at).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}
             </span>
           </div>
 

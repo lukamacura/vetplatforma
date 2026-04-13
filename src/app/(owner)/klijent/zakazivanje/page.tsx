@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Building2, CheckCircle2 } from "lucide-react"
@@ -90,7 +90,6 @@ function BookingPageInner() {
   const [selectedService, setSelectedService] = useState<Service | null>(null)
   const [selectedDay, setSelectedDay]         = useState("")
   const [selectedSlot, setSelectedSlot]       = useState("")
-  const [availableDays, setAvailableDays]     = useState<string[]>([])
   const [availableSlots, setAvailableSlots]   = useState<string[]>([])
   const [saving, setSaving]                   = useState(false)
 
@@ -149,10 +148,10 @@ function BookingPageInner() {
     loadServicesAndHours()
   }, [selectedClinic])
 
-  useEffect(() => {
-    if (!selectedClinic) return
-    setAvailableDays(getAvailableDays(clinicHoursMap))
-  }, [clinicHoursMap, selectedClinic])
+  const availableDays = useMemo(
+    () => selectedClinic ? getAvailableDays(clinicHoursMap) : [],
+    [clinicHoursMap, selectedClinic],
+  )
 
   useEffect(() => {
     if (!selectedDay || !selectedService || !selectedClinic) return

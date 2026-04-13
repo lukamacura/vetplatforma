@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, ToggleLeft, ToggleRight, Scissors, Clock } from "lucide-react"
+import { Plus, CheckCircle2, Circle, Scissors, Clock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -52,32 +52,26 @@ function ServiceRow({ service, onToggle, index }: {
         {service.duration_minutes} min
       </span>
 
-      {/* Active status — green / muted */}
-      <span
-        className={`badge shrink-0 ${service.is_active ? "badge-green" : "badge-muted"}`}
+      {/* Active toggle — switch style */}
+      <motion.button
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.96 }}
+        onClick={onToggle}
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs shrink-0 transition-all"
+        style={{
+          background:  service.is_active ? "var(--green-tint)" : "var(--surface-raised)",
+          color:       service.is_active ? "var(--green)"      : "var(--text-muted)",
+          border:      `1px solid ${service.is_active ? "rgba(22,163,74,0.25)" : "var(--border)"}`,
+          fontWeight:  600,
+          minWidth:    100,
+        }}
+        title={service.is_active ? "Klikni da deaktiviraš" : "Klikni da aktiviraš"}
       >
-        {service.is_active ? "Aktivna" : "Neaktivna"}
-      </span>
-
-      {/* Toggle */}
-      <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} className="shrink-0">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onToggle}
-          className="gap-1.5 text-xs font-500 h-7 px-2.5"
-          style={{
-            color:      service.is_active ? "var(--red)"   : "var(--green)",
-            background: service.is_active ? "var(--red-tint)" : "var(--green-tint)",
-            fontWeight: 500,
-          }}
-        >
-          {service.is_active
-            ? <><ToggleRight size={14} strokeWidth={2} /> Deaktiviraj</>
-            : <><ToggleLeft  size={14} strokeWidth={2} /> Aktiviraj</>
-          }
-        </Button>
-      </motion.div>
+        {service.is_active
+          ? <><CheckCircle2 size={13} strokeWidth={2.25} /> Aktivno</>
+          : <><Circle       size={13} strokeWidth={1.75} /> Neaktivno</>
+        }
+      </motion.button>
     </motion.div>
   )
 }
