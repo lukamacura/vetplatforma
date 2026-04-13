@@ -17,22 +17,17 @@ function isSameDay(a: Date, b: Date) {
     a.getDate() === b.getDate()
 }
 
-function startOfWeek(date: Date): Date {
-  const d = new Date(date)
-  const day = d.getDay()
-  // Monday-first: if Sunday (0) treat as 7
-  const diff = (day === 0 ? 7 : day) - 1
-  d.setDate(d.getDate() - diff)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function getWeekDays(weekStart: Date): Date[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart)
-    d.setDate(d.getDate() + i)
-    return d
-  })
+function getMonthGrid(year: number, month: number): (Date | null)[] {
+  const first = new Date(year, month, 1)
+  const last  = new Date(year, month + 1, 0)
+  // Monday-first: 0=Mon … 6=Sun
+  const startPad = (first.getDay() + 6) % 7
+  const endPad   = (7 - ((startPad + last.getDate()) % 7)) % 7
+  const cells: (Date | null)[] = []
+  for (let i = 0; i < startPad; i++) cells.push(null)
+  for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(year, month, d))
+  for (let i = 0; i < endPad; i++) cells.push(null)
+  return cells
 }
 
 const SPECIES_LABEL: Record<string, string> = {
@@ -211,8 +206,10 @@ export default function DashboardPage() {
   today.setHours(0, 0, 0, 0)
 
   const [selectedDate,    setSelectedDate]    = useState<Date>(new Date())
-  const [weekStart,       setWeekStart]       = useState<Date>(() => startOfWeek(new Date()))
+  const [viewYear,        setViewYear]        = useState(() => new Date().getFullYear())
+  const [viewMonth,       setViewMonth]       = useState(() => new Date().getMonth())
   const [appointments,    setAppointments]    = useState<AppointmentWithDetails[]>([])
+  const [monthDotCounts,  setMonthDotCounts]  = useState<Record<string, number>>({})
   const [connectedCount,  setConnectedCount]  = useState(0)
   const [clinicName,      setClinicName]      = useState("")
   const [clinicId,        setClinicId]        = useState<string | null>(null)
@@ -317,7 +314,30 @@ export default function DashboardPage() {
     loadAppointments()
   }, [clinicId, selectedDate])
 
-  const weekDays = getWeekDays(weekStart)
+  // Load appointment counts for each day in the viewed month (dots)
+  useEffect(() => {
+    if (!clinicId) return
+    async function loadMonthCounts() {
+      const supabase = createClient()
+      const monthStart = new Date(viewYear, viewMonth, 1)
+      const monthEnd   = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999)
+      const { data } = await supabase
+        .from("appointments").select("scheduled_at")
+        .eq("clinic_id", clinicId)
+        .gte("scheduled_at", monthStart.toISOString())
+        .lte("scheduled_at", monthEnd.toISOString())
+        .neq("status", "cancelled")
+      const counts: Record<string, number> = {}
+      for (const row of data ?? []) {
+        const key = new Date(row.scheduled_at).toDateString()
+        counts[key] = (counts[key] ?? 0) + 1
+      }
+      setMonthDotCounts(counts)
+    }
+    loadMonthCounts()
+  }, [clinicId, viewYear, viewMonth])
+
+  const monthGrid = getMonthGrid(viewYear, viewMonth)
 
   const selectedDateLabel = isToday
     ? new Date().toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })
@@ -359,83 +379,158 @@ export default function DashboardPage() {
         </Link>
       </motion.div>
 
-      {/* Week strip navigator */}
+      {/* Mini month calendar */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.06, duration: 0.26 }}
-        className="solid-card rounded-2xl p-3"
+        className="solid-card rounded-2xl p-4"
       >
-        <div className="flex items-center gap-2">
-          {/* Prev week */}
+        {/* Month header */}
+        <div className="flex items-center justify-between mb-3">
           <button
             onClick={() => {
-              const prev = new Date(weekStart)
-              prev.setDate(prev.getDate() - 7)
-              setWeekStart(prev)
+              if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+              else setViewMonth(m => m - 1)
             }}
-            className="icon-sm icon-muted shrink-0"
+            className="icon-sm icon-muted"
             style={{ cursor: "pointer" }}
           >
-            <ChevronLeft size={15} strokeWidth={2} />
+            <ChevronLeft size={14} strokeWidth={2} />
           </button>
 
-          {/* Day chips */}
-          <div className="flex flex-1 gap-1 justify-between overflow-x-auto">
-            {weekDays.map((day) => {
-              const isSelected = isSameDay(day, selectedDate)
-              const isDayToday = isSameDay(day, new Date())
-              return (
-                <button
-                  key={day.toISOString()}
-                  onClick={() => setSelectedDate(new Date(day))}
-                  className="flex flex-col items-center rounded-xl px-2 py-2 min-w-[36px] transition-all"
-                  style={{
-                    background:  isSelected ? "var(--brand)" : isDayToday ? "var(--brand-tint)" : "transparent",
-                    color:       isSelected ? "#fff" : isDayToday ? "var(--brand)" : "var(--text-secondary)",
-                  }}
-                >
-                  <span className="text-xs" style={{ fontWeight: 500, fontSize: 10, opacity: isSelected ? 0.85 : 1 }}>
-                    {day.toLocaleDateString("sr-Latn-RS", { weekday: "short" })}
-                  </span>
-                  <span className="text-sm mt-0.5" style={{ fontWeight: isSelected || isDayToday ? 700 : 500 }}>
-                    {day.getDate()}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Next week */}
           <button
             onClick={() => {
-              const next = new Date(weekStart)
-              next.setDate(next.getDate() + 7)
-              setWeekStart(next)
+              const now = new Date()
+              setSelectedDate(now)
+              setViewYear(now.getFullYear())
+              setViewMonth(now.getMonth())
             }}
-            className="icon-sm icon-muted shrink-0"
+            className="flex items-center gap-1.5"
             style={{ cursor: "pointer" }}
           >
-            <ChevronRight size={15} strokeWidth={2} />
+            <span className="text-sm" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+              {new Date(viewYear, viewMonth).toLocaleDateString("sr-Latn-RS", { month: "long", year: "numeric" })}
+            </span>
+            {(viewYear !== new Date().getFullYear() || viewMonth !== new Date().getMonth()) && (
+              <span
+                className="text-xs rounded-md px-2 py-0.5"
+                style={{ background: "var(--brand-tint)", color: "var(--brand)", fontWeight: 600 }}
+              >
+                Danas
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => {
+              if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+              else setViewMonth(m => m + 1)
+            }}
+            className="icon-sm icon-muted"
+            style={{ cursor: "pointer" }}
+          >
+            <ChevronRight size={14} strokeWidth={2} />
           </button>
         </div>
 
-        {/* Danas button */}
-        {!isToday && (
-          <div className="mt-2 text-center">
-            <button
-              onClick={() => {
-                const now = new Date()
-                setSelectedDate(now)
-                setWeekStart(startOfWeek(now))
-              }}
-              className="text-xs rounded-lg px-3 py-1"
-              style={{ color: "var(--brand)", background: "var(--brand-tint)", fontWeight: 600 }}
-            >
-              Danas
-            </button>
-          </div>
-        )}
+        {/* Weekday labels */}
+        <div className="grid grid-cols-7 mb-1">
+          {["Po", "Ut", "Sr", "Če", "Pe", "Su", "Ne"].map((d) => (
+            <div key={d} className="text-center py-1">
+              <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {d}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Day grid */}
+        <div className="grid grid-cols-7 gap-y-0.5">
+          {monthGrid.map((day, i) => {
+            if (!day) return <div key={`empty-${i}`} />
+            const isSelected  = isSameDay(day, selectedDate)
+            const isDayToday  = isSameDay(day, new Date())
+            const dotCount    = monthDotCounts[day.toDateString()] ?? 0
+            const isWeekend   = day.getDay() === 0 || day.getDay() === 6
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setSelectedDate(new Date(day))}
+                className="flex flex-col items-center justify-center py-1 transition-all"
+                style={{ cursor: "pointer", background: "transparent", border: "none" }}
+                onMouseEnter={(e) => {
+                  const inner = e.currentTarget.querySelector(".day-inner") as HTMLElement | null
+                  if (inner && !isSelected) inner.style.background = isDayToday ? "var(--brand-tint)" : "var(--surface-raised)"
+                }}
+                onMouseLeave={(e) => {
+                  const inner = e.currentTarget.querySelector(".day-inner") as HTMLElement | null
+                  if (inner) inner.style.background = isSelected ? "var(--brand)" : isDayToday ? "var(--brand-tint)" : "transparent"
+                }}
+              >
+                <div
+                  className="day-inner flex items-center justify-center rounded-full transition-all"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    background: isSelected
+                      ? "var(--brand)"
+                      : isDayToday
+                      ? "var(--brand-tint)"
+                      : "transparent",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: isSelected || isDayToday ? 700 : 400,
+                      color: isSelected
+                        ? "#fff"
+                        : isDayToday
+                        ? "var(--brand)"
+                        : isWeekend
+                        ? "var(--text-muted)"
+                        : "var(--text-primary)",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {day.getDate()}
+                  </span>
+                </div>
+                {/* Appointment dots */}
+                <div className="flex gap-0.5 mt-1 h-1 items-center">
+                  {dotCount >= 1 && (
+                    <div
+                      style={{
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: isSelected ? "var(--brand)" : "var(--brand)",
+                        opacity: isSelected ? 0.6 : 1,
+                      }}
+                    />
+                  )}
+                  {dotCount >= 4 && (
+                    <div
+                      style={{
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: isSelected ? "var(--brand)" : "var(--brand)",
+                        opacity: isSelected ? 0.6 : 1,
+                      }}
+                    />
+                  )}
+                  {dotCount >= 8 && (
+                    <div
+                      style={{
+                        width: 4, height: 4, borderRadius: "50%",
+                        background: "var(--text-muted)",
+                        opacity: 0.6,
+                      }}
+                    />
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </motion.div>
 
       {/* Stat cards */}

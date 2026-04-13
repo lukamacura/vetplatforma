@@ -4,7 +4,6 @@ import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { PawPrint } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -90,13 +89,13 @@ function LoginForm() {
             {error && (
               <p className="text-sm text-red-600">{error}</p>
             )}
-            <Button
+            <button
               type="submit"
-              className="w-full bg-[#2BB5A0] hover:bg-[#239684] text-white"
+              className="btn-primary w-full py-3 text-base"
               disabled={loading}
             >
               {loading ? "Prijavljivanje..." : "Prijavi se"}
-            </Button>
+            </button>
           </form>
           <p className="text-center text-sm text-muted-foreground mt-4">
             Nemate nalog?{" "}

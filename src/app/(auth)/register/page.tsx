@@ -4,7 +4,6 @@ import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { PawPrint } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -119,7 +118,7 @@ function RegisterForm() {
                   onClick={() => setRole("vet")}
                   className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${
                     role === "vet"
-                      ? "bg-[#2BB5A0] text-white font-medium"
+                      ? "bg-teal-200 text-teal-600 font-medium"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -130,7 +129,7 @@ function RegisterForm() {
                   onClick={() => setRole("owner")}
                   className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${
                     role === "owner"
-                      ? "bg-[#2BB5A0] text-white font-medium"
+                      ? "bg-teal-200 text-teal-600 font-medium"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -201,13 +200,13 @@ function RegisterForm() {
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
-            <Button
+            <button
               type="submit"
-              className="w-full bg-[#2BB5A0] hover:bg-[#239684] text-white"
+              className="btn-primary w-full py-3 text-base"
               disabled={loading}
             >
               {loading ? "Kreiranje..." : "Kreiraj nalog"}
-            </Button>
+            </button>
           </form>
           <p className="text-center text-sm text-muted-foreground mt-4">
             Već imate nalog?{" "}
