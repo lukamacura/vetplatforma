@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.updated": {
       const sub        = event.data.object as Stripe.Subscription
       const customerId = sub.customer as string
-      const periodEnd  = new Date(sub.current_period_end * 1000).toISOString()
+      const periodEnd  = new Date(sub.items.data[0].current_period_end * 1000).toISOString()
       const isActive   = sub.status === "active" || sub.status === "trialing"
       await supabase
         .from("clinics")
