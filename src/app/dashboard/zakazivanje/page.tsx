@@ -15,6 +15,11 @@ type ConnectedOwner = {
 
 type OccupiedInterval = { start: number; end: number }
 
+function toLocalDateStr(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function overlaps(slotStart: number, slotEnd: number, intervals: OccupiedInterval[]): boolean {
   return intervals.some((iv) => slotStart < iv.end && slotEnd > iv.start)
 }
@@ -36,10 +41,7 @@ function generateSlots(
     const slotStart = baseDate.getTime() + min * 60_000
     const slotEnd   = slotStart + durationMin * 60_000
     if (!overlaps(slotStart, slotEnd, intervals)) {
-      const h   = Math.floor(min / 60)
-      const m   = min % 60
-      const pad = (n: number) => n.toString().padStart(2, "0")
-      slots.push(`${date}T${pad(h)}:${pad(m)}:00`)
+      slots.push(new Date(slotStart).toISOString())
     }
   }
   return slots
@@ -98,6 +100,7 @@ function VetBookingPageInner() {
   const [availableSlots,  setAvailableSlots]  = useState<string[]>([])
   const [selectedSlot,    setSelectedSlot]    = useState("")
   const [loadingSlots,    setLoadingSlots]    = useState(false)
+  const [errorMsg,        setErrorMsg]        = useState("")
 
   // Initial load
   useEffect(() => {
@@ -189,17 +192,17 @@ function VetBookingPageInner() {
     async function loadSlots() {
       setLoadingSlots(true)
       const supabase = createClient()
-      const dayStr   = selectedDate!.toISOString().slice(0, 10)
-      const dayStart = `${dayStr}T00:00:00`
-      const dayEnd   = `${dayStr}T23:59:59`
+      const dayStr   = toLocalDateStr(selectedDate!)
+      const dayStartDate = new Date(`${dayStr}T00:00:00`)
+      const dayEndDate   = new Date(`${dayStr}T23:59:59`)
 
       const { data: apptData } = await supabase
         .from("appointments")
         .select("scheduled_at, service_id")
         .eq("clinic_id", clinicId)
         .eq("status", "confirmed")
-        .gte("scheduled_at", dayStart)
-        .lte("scheduled_at", dayEnd)
+        .gte("scheduled_at", dayStartDate.toISOString())
+        .lte("scheduled_at", dayEndDate.toISOString())
 
       const appts = apptData ?? []
       let intervals: OccupiedInterval[] = []
@@ -232,6 +235,7 @@ function VetBookingPageInner() {
   async function handleConfirm() {
     if (!selectedPet || !selectedService || !selectedSlot || !clinicId || !selectedOwner) return
     setSaving(true)
+    setErrorMsg("")
     const supabase = createClient()
     const { error } = await supabase.from("appointments").insert({
       clinic_id:    clinicId,
@@ -242,7 +246,11 @@ function VetBookingPageInner() {
       status:       "confirmed",
     })
     setSaving(false)
-    if (!error) setStep(5)
+    if (error) {
+      setErrorMsg("Greška pri zakazivanju termina. Pokušajte ponovo.")
+    } else {
+      setStep(5)
+    }
   }
 
   const weekDays = getWeekDays(weekStart)
@@ -291,8 +299,7 @@ function VetBookingPageInner() {
         </div>
         <button
           onClick={() => router.push("/dashboard")}
-          className="inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm text-white"
-          style={{ background: "var(--brand)", fontWeight: 600 }}
+          className="btn-primary inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm"
         >
           Nazad na pregled dana
         </button>
@@ -561,6 +568,17 @@ function VetBookingPageInner() {
             </motion.div>
           )}
 
+          {errorMsg && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl px-4 py-3 text-sm"
+              style={{ background: "var(--red-tint)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.18)" }}
+            >
+              {errorMsg}
+            </motion.div>
+          )}
+
           {selectedSlot && (
             <motion.button
               initial={{ opacity: 0, y: 6 }}
@@ -568,8 +586,7 @@ function VetBookingPageInner() {
               transition={{ duration: 0.2 }}
               onClick={handleConfirm}
               disabled={saving}
-              className="w-full rounded-xl py-3.5 text-sm text-white"
-              style={{ background: "var(--brand)", fontWeight: 700 }}
+              className="btn-primary w-full rounded-xl py-3.5 text-sm"
             >
               {saving ? "Zakazivanje..." : "Potvrdi termin"}
             </motion.button>

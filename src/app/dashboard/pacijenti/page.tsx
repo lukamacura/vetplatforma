@@ -265,7 +265,7 @@ export default function PatientsPage() {
         className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl">Povezani klijenti</h1>
+          <h1 className="text-2xl">Vaši pacijenti</h1>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {!loading && clients.length > 0 && (
               <>

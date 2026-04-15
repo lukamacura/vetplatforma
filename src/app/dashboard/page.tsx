@@ -217,13 +217,18 @@ export default function DashboardPage() {
 
   const isToday = isSameDay(selectedDate, new Date())
 
+  const [noShowError, setNoShowError] = useState<string | null>(null)
+
   const handleNoShow = useCallback(async (id: string) => {
+    setNoShowError(null)
     const supabase = createClient()
     const { error } = await supabase
       .from("appointments")
       .update({ status: "no_show" })
       .eq("id", id)
-    if (!error) {
+    if (error) {
+      setNoShowError("Greška pri označavanju statusa. Pokušajte ponovo.")
+    } else {
       setAppointments((prev) =>
         prev.map((a) => a.id === id ? { ...a, status: "no_show" } : a)
       )
@@ -370,8 +375,7 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/dashboard/zakazivanje"
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm text-white shrink-0"
-          style={{ background: "var(--brand)", fontWeight: 600 }}
+          className="btn-primary flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm shrink-0"
         >
           <CalendarPlus size={15} strokeWidth={2} />
           <span className="hidden sm:inline">Nova zakazivanje</span>
@@ -583,6 +587,14 @@ export default function DashboardPage() {
 
         {/* Card body */}
         <div className="p-4">
+          {noShowError && (
+            <div
+              className="rounded-xl px-4 py-3 mb-3 text-sm"
+              style={{ background: "var(--red-tint)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.18)" }}
+            >
+              {noShowError}
+            </div>
+          )}
           {loading ? (
             <div className="space-y-2.5 py-1">
               {[...Array(3)].map((_, i) => (

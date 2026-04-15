@@ -3,47 +3,69 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
-  ArrowLeft, Save, Syringe, Stethoscope, Weight,
-  Phone, CalendarDays, FileText, CheckCircle, History,
+  ArrowLeft,
+  Save,
+  Syringe,
+  Stethoscope,
+  Phone,
+  CheckCircle,
+  History,
+  Pencil,
+  Lock,
+  Info,
+  X,
 } from "lucide-react"
 import { motion } from "framer-motion"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
-import type { Pet, Profile, AppointmentStatus } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import type { Pet, Profile, AppointmentStatus, Species, Gender } from "@/lib/types"
 
 type ApptHistoryRow = {
-  id:           string
+  id: string
   scheduled_at: string
-  status:       AppointmentStatus
+  status: AppointmentStatus
   service_name: string
 }
 
-const SPECIES_LABEL: Record<string, string> = {
-  dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
+const SPECIES_LABEL: Record<Species, string> = {
+  dog: "Pas",
+  cat: "Mačka",
+  bird: "Ptica",
+  other: "Ostalo",
 }
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
+const SPECIES_EMOJI: Record<Species, string> = {
+  dog: "🐕",
+  cat: "🐈",
+  bird: "🐦",
+  other: "🐾",
+}
+const GENDER_LABEL: Record<Gender, string> = {
+  male: "Muški",
+  female: "Ženski",
+  unknown: "Nepoznat",
 }
 
-/* ── Derive status from a date string ── */
+const SPECIES_OPTIONS: { value: Species; label: string }[] = [
+  { value: "dog", label: "Pas" },
+  { value: "cat", label: "Mačka" },
+  { value: "bird", label: "Ptica" },
+  { value: "other", label: "Ostalo" },
+]
+const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+  { value: "male", label: "Muški" },
+  { value: "female", label: "Ženski" },
+  { value: "unknown", label: "Nepoznat" },
+]
+
 function dateStatus(dateStr: string | null | undefined): "overdue" | "soon" | "ok" | null {
   if (!dateStr) return null
   const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
-  if (days < 0)   return "overdue"
+  if (days < 0) return "overdue"
   if (days <= 14) return "soon"
   return "ok"
 }
 
-/*
-  Color semantics:
-    red    → overdue / expired
-    amber  → due within 14 days / attention needed
-    green  → scheduled, on track
-    blue   → neutral info / timing
-    teal   → brand / confirmed
-*/
 const STATUS_BADGE: Record<
   "overdue" | "soon" | "ok",
   { cls: string; dot: boolean; label: (d: string) => string }
@@ -51,7 +73,8 @@ const STATUS_BADGE: Record<
   overdue: {
     cls: "badge badge-red",
     dot: true,
-    label: (d) => `Isteklo ${new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
+    label: (d) =>
+      `Isteklo ${new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`,
   },
   soon: {
     cls: "badge badge-amber",
@@ -64,11 +87,16 @@ const STATUS_BADGE: Record<
   ok: {
     cls: "badge badge-green",
     dot: false,
-    label: (d) => new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    label: (d) =>
+      new Date(d).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" }),
   },
 }
 
-function DateStatusBadge({ date, icon: Icon, label }: {
+function DateStatusBadge({
+  date,
+  icon: Icon,
+  label,
+}: {
   date: string | null | undefined
   icon: React.ElementType
   label: string
@@ -86,61 +114,134 @@ function DateStatusBadge({ date, icon: Icon, label }: {
   )
 }
 
-/* ── Section card ── */
+function ageLabelSr(birthDate: string | null): string | null {
+  if (!birthDate) return null
+  const b = new Date(birthDate + "T12:00:00")
+  const today = new Date()
+  let years = today.getFullYear() - b.getFullYear()
+  const md = today.getMonth() - b.getMonth()
+  if (md < 0 || (md === 0 && today.getDate() < b.getDate())) years--
+  if (years < 1) {
+    const months = (today.getFullYear() - b.getFullYear()) * 12 + (today.getMonth() - b.getMonth())
+    const m = Math.max(0, months)
+    if (m === 0) return "Manje od mesec dana"
+    if (m === 1) return "1 mesec"
+    if (m >= 2 && m <= 4) return `${m} meseca`
+    return `${m} meseci`
+  }
+  const n = years
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return `${n} godina`
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} godine`
+  return `${n} godina`
+}
+
 function SectionCard({
-  title, icon: Icon, iconClass = "icon-brand", children, delay = 0,
+  title,
+  icon: Icon,
+  iconClass = "icon-brand",
+  children,
+  delay = 0,
+  action,
 }: {
   title: string
   icon: React.ElementType
   iconClass?: string
   children: React.ReactNode
   delay?: number
+  action?: React.ReactNode
 }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.26 }}
-      className="solid-card rounded-2xl overflow-hidden"
+      className="solid-card rounded-2xl overflow-hidden h-full"
     >
       <div
-        className="flex items-center gap-2.5 px-5 py-3.5"
+        className="flex items-center gap-2.5 px-5 py-3"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <div className={`icon-sm ${iconClass}`}>
+        <div className={`icon-sm shrink-0 ${iconClass}`}>
           <Icon size={13} strokeWidth={2.25} />
         </div>
-        <h3 className="text-sm font-600" style={{ fontWeight: 600 }}>{title}</h3>
+        <h3 className="text-sm leading-tight flex-1" style={{ fontWeight: 600 }}>
+          {title}
+        </h3>
+        {action}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="px-5 py-4">{children}</div>
     </motion.div>
   )
 }
 
-/* ── Page ── */
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <dt
+      className="text-[10px] uppercase tracking-wider"
+      style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}
+    >
+      {children}
+    </dt>
+  )
+}
+
+function FieldValue({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
+  return (
+    <dd
+      className={cn("text-[13px] mt-0.5 leading-snug", mono && "font-mono text-xs tracking-tight")}
+      style={{ color: "var(--text-primary)", fontWeight: 500 }}
+    >
+      {children || <span style={{ color: "var(--text-muted)" }}>—</span>}
+    </dd>
+  )
+}
+
+const inputEdit =
+  "h-7 rounded-lg border border-input bg-transparent px-2 text-[13px] font-medium focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 md:text-[13px]"
+
+function formatDate(d: string | null) {
+  if (!d) return null
+  return new Date(d + "T12:00:00").toLocaleDateString("sr-Latn-RS", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}
+
 export default function PetProfilePage() {
   const params = useParams()
   const router = useRouter()
-  const petId  = params.id as string
-
-  const [pet,    setPet]    = useState<Pet | null>(null)
-  const [owner,  setOwner]  = useState<Profile | null>(null)
+  const petId = params.id as string
+  const [pet, setPet] = useState<Pet | null>(null)
+  const [owner, setOwner] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [apptHistory, setApptHistory] = useState<ApptHistoryRow[]>([])
 
-  const [weightKg,        setWeightKg]        = useState("")
+  const [editingBasics, setEditingBasics] = useState(false)
+
+  const [editName, setEditName] = useState("")
+  const [editSpecies, setEditSpecies] = useState<Species>("dog")
+  const [editBreed, setEditBreed] = useState("")
+  const [editBirthDate, setEditBirthDate] = useState("")
+  const [editChipId, setEditChipId] = useState("")
+  const [editPassport, setEditPassport] = useState("")
+  const [editGender, setEditGender] = useState<Gender>("unknown")
+  const [editColor, setEditColor] = useState("")
+  const [weightKg, setWeightKg] = useState("")
+
   const [nextVaccineDate, setNextVaccineDate] = useState("")
   const [nextControlDate, setNextControlDate] = useState("")
-  const [vetNotes,        setVetNotes]        = useState("")
+  const [vetNotes, setVetNotes] = useState("")
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const { data: petData, error: petError } = await supabase
-        .from("pets").select("*").eq("id", petId).single()
+      const { data: petData, error: petError } = await supabase.from("pets").select("*").eq("id", petId).single()
 
       if (petError || !petData) {
         setError("Ljubimac nije pronađen.")
@@ -148,39 +249,49 @@ export default function PetProfilePage() {
         return
       }
 
-      setPet(petData as Pet)
-      setWeightKg(petData.weight_kg?.toString() ?? "")
-      setNextVaccineDate(petData.next_vaccine_date ?? "")
-      setNextControlDate(petData.next_control_date ?? "")
-      setVetNotes(petData.vet_notes ?? "")
+      const p = petData as Pet
+      setPet(p)
+      setEditName(p.name)
+      setEditSpecies(p.species)
+      setEditBreed(p.breed ?? "")
+      setEditBirthDate(p.birth_date ?? "")
+      setEditChipId(p.chip_id ?? "")
+      setEditPassport(p.passport_number ?? "")
+      setEditGender(p.gender ?? "unknown")
+      setEditColor(p.color ?? "")
+      setWeightKg(p.weight_kg?.toString() ?? "")
+      setNextVaccineDate(p.next_vaccine_date ?? "")
+      setNextControlDate(p.next_control_date ?? "")
+      setVetNotes(p.vet_notes ?? "")
 
-      const { data: ownerData } = await supabase
-        .from("profiles").select("*").eq("id", petData.owner_id).single()
+      const { data: ownerData } = await supabase.from("profiles").select("*").eq("id", p.owner_id).single()
       setOwner(ownerData as Profile)
 
-      // Fetch appointment history for this pet
       const { data: apptData } = await supabase
         .from("appointments")
         .select("id, scheduled_at, status, service_id")
         .eq("pet_id", petId)
         .order("scheduled_at", { ascending: false })
-        .limit(20)
+        .limit(25)
 
       if (apptData && apptData.length > 0) {
         const serviceIds = [...new Set(apptData.map((a: { service_id: string }) => a.service_id))]
-        const { data: svcs } = await supabase
-          .from("services").select("id, name").in("id", serviceIds)
+        const { data: svcs } = await supabase.from("services").select("id, name").in("id", serviceIds)
         const svcMap: Record<string, string> = Object.fromEntries(
           (svcs ?? []).map((s: { id: string; name: string }) => [s.id, s.name])
         )
         setApptHistory(
-          apptData.map((a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string }) => ({
-            id:           a.id,
-            scheduled_at: a.scheduled_at,
-            status:       a.status,
-            service_name: svcMap[a.service_id] ?? "—",
-          }))
+          apptData.map(
+            (a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string }) => ({
+              id: a.id,
+              scheduled_at: a.scheduled_at,
+              status: a.status,
+              service_name: svcMap[a.service_id] ?? "—",
+            })
+          )
         )
+      } else {
+        setApptHistory([])
       }
 
       setLoading(false)
@@ -188,18 +299,41 @@ export default function PetProfilePage() {
     load()
   }, [petId])
 
+  function cancelBasicsEdit() {
+    if (!pet) return
+    setEditName(pet.name)
+    setEditSpecies(pet.species)
+    setEditBreed(pet.breed ?? "")
+    setEditBirthDate(pet.birth_date ?? "")
+    setEditChipId(pet.chip_id ?? "")
+    setEditPassport(pet.passport_number ?? "")
+    setEditGender(pet.gender ?? "unknown")
+    setEditColor(pet.color ?? "")
+    setWeightKg(pet.weight_kg?.toString() ?? "")
+    setEditingBasics(false)
+  }
+
   async function handleSave() {
     if (!pet) return
     setSaving(true)
     setSaved(false)
+    setError(null)
     const supabase = createClient()
     const { error: updateError } = await supabase
       .from("pets")
       .update({
-        weight_kg:          weightKg ? parseFloat(weightKg) : null,
-        next_vaccine_date:  nextVaccineDate || null,
-        next_control_date:  nextControlDate || null,
-        vet_notes:          vetNotes || null,
+        name: editName.trim() || pet.name,
+        species: editSpecies,
+        breed: editBreed.trim() || null,
+        birth_date: editBirthDate || null,
+        chip_id: editChipId.trim() || null,
+        passport_number: editPassport.trim() || null,
+        gender: editGender,
+        color: editColor.trim() || null,
+        weight_kg: weightKg ? parseFloat(weightKg) : null,
+        next_vaccine_date: nextVaccineDate || null,
+        next_control_date: nextControlDate || null,
+        vet_notes: vetNotes || null,
       })
       .eq("id", pet.id)
     setSaving(false)
@@ -207,16 +341,36 @@ export default function PetProfilePage() {
       setError("Greška pri čuvanju.")
     } else {
       setSaved(true)
+      const updated = {
+        ...pet,
+        name: editName.trim() || pet.name,
+        species: editSpecies,
+        breed: editBreed.trim() || null,
+        birth_date: editBirthDate || null,
+        chip_id: editChipId.trim() || null,
+        passport_number: editPassport.trim() || null,
+        gender: editGender,
+        color: editColor.trim() || null,
+        weight_kg: weightKg ? parseFloat(weightKg) : null,
+        next_vaccine_date: nextVaccineDate || null,
+        next_control_date: nextControlDate || null,
+        vet_notes: vetNotes || null,
+      }
+      setPet(updated)
+      setEditingBasics(false)
       setTimeout(() => setSaved(false), 3000)
     }
   }
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-4 pt-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-32 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
-        ))}
+      <div className="space-y-4 pt-2">
+        <div className="h-24 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+        <div className="grid lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-3 h-56 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+          <div className="lg:col-span-5 h-56 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+          <div className="lg:col-span-4 h-56 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+        </div>
       </div>
     )
   }
@@ -230,230 +384,306 @@ export default function PetProfilePage() {
 
   const vaccStatus = dateStatus(nextVaccineDate || pet.next_vaccine_date)
   const ctrlStatus = dateStatus(nextControlDate || pet.next_control_date)
-
-  // Overall health color for avatar ring
   const healthColor =
     vaccStatus === "overdue" || ctrlStatus === "overdue"
       ? "var(--red)"
       : vaccStatus === "soon" || ctrlStatus === "soon"
-      ? "var(--amber)"
-      : vaccStatus === "ok" || ctrlStatus === "ok"
-      ? "var(--green)"
-      : "var(--border-strong)"
+        ? "var(--amber)"
+        : vaccStatus === "ok" || ctrlStatus === "ok"
+          ? "var(--green)"
+          : "var(--border-strong)"
+
+  const ageStr = ageLabelSr(editBirthDate || pet.birth_date)
+  const subtitleParts = [SPECIES_LABEL[editSpecies]]
+  if (editBreed.trim()) subtitleParts.push(editBreed.trim())
+  if (ageStr) subtitleParts.push(ageStr)
+
+  const basicsRows: { label: string; value: React.ReactNode; editField: React.ReactNode }[] = [
+    {
+      label: "Vrsta",
+      value: SPECIES_LABEL[editSpecies],
+      editField: (
+        <select
+          value={editSpecies}
+          onChange={(e) => setEditSpecies(e.target.value as Species)}
+          className={cn(inputEdit, "w-full cursor-pointer")}
+        >
+          {SPECIES_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      label: "Rasa",
+      value: editBreed || null,
+      editField: <Input value={editBreed} onChange={(e) => setEditBreed(e.target.value)} className={inputEdit} placeholder="—" />,
+    },
+    {
+      label: "Pol",
+      value: GENDER_LABEL[editGender],
+      editField: (
+        <select
+          value={editGender}
+          onChange={(e) => setEditGender(e.target.value as Gender)}
+          className={cn(inputEdit, "w-full cursor-pointer")}
+        >
+          {GENDER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      label: "Datum rođenja",
+      value: formatDate(editBirthDate),
+      editField: <Input type="date" value={editBirthDate} onChange={(e) => setEditBirthDate(e.target.value)} className={inputEdit} />,
+    },
+    {
+      label: "Boja",
+      value: editColor || null,
+      editField: <Input value={editColor} onChange={(e) => setEditColor(e.target.value)} className={inputEdit} placeholder="—" />,
+    },
+    {
+      label: "Težina",
+      value: weightKg ? `${weightKg} kg` : null,
+      editField: (
+        <div className="flex items-center gap-1.5">
+          <Input type="number" step="0.1" min="0" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className={cn(inputEdit, "w-24")} placeholder="—" />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>kg</span>
+        </div>
+      ),
+    },
+    {
+      label: "ID mikročipa",
+      value: editChipId ? <span className="font-mono text-xs tracking-tight">{editChipId}</span> : null,
+      editField: <Input value={editChipId} onChange={(e) => setEditChipId(e.target.value)} className={cn(inputEdit, "font-mono text-xs")} placeholder="—" />,
+    },
+    {
+      label: "Broj pasoša",
+      value: editPassport || null,
+      editField: <Input value={editPassport} onChange={(e) => setEditPassport(e.target.value)} className={inputEdit} placeholder="—" />,
+    },
+  ]
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
-
-      {/* ── Pet hero card ── */}
+    <div className="space-y-5 w-full">
+      {/* Hero */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28 }}
         className="solid-card rounded-2xl p-5"
       >
-        {/* Back */}
         <button
+          type="button"
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-xs font-600 mb-5 transition-colors"
+          className="flex items-center gap-1.5 text-xs mb-4 transition-colors"
           style={{ color: "var(--text-muted)", fontWeight: 600 }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-primary)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)" }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)" }}
         >
           <ArrowLeft size={14} strokeWidth={2} />
           Nazad na pacijente
         </button>
 
         <div className="flex items-start gap-4">
-          {/* Avatar - ring color encodes health */}
           <div
-            className="shrink-0 w-16 h-16 rounded-2xl flex items-center justify-center text-3xl select-none"
+            className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center text-2xl select-none"
             style={{
-              background:   "var(--surface-raised)",
-              outline:      `3px solid ${healthColor}`,
+              background: "var(--surface-raised)",
+              outline: `3px solid ${healthColor}`,
               outlineOffset: "2px",
             }}
           >
-            {SPECIES_EMOJI[pet.species]}
+            {SPECIES_EMOJI[editSpecies]}
           </div>
-
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl">{pet.name}</h1>
+            <h1 className="text-lg" style={{ fontWeight: 700 }}>{editName || pet.name}</h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
-              {SPECIES_LABEL[pet.species]}{pet.breed ? ` · ${pet.breed}` : ""}
+              {subtitleParts.join(" · ")}
             </p>
             {owner && (
-              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                <span className="badge badge-muted" style={{ gap: 4 }}>
-                  <Phone size={10} strokeWidth={2} />
-                  {owner.full_name}
-                  {owner.phone && ` · ${owner.phone}`}
-                </span>
-              </div>
+              <p className="text-xs mt-1.5 flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                <Phone size={11} strokeWidth={2} className="opacity-60" />
+                {owner.full_name}{owner.phone && ` · ${owner.phone}`}
+              </p>
             )}
           </div>
-
-          {/* Health status badges */}
           <div className="flex flex-col gap-1.5 items-end shrink-0">
-            <DateStatusBadge
-              date={nextVaccineDate || pet.next_vaccine_date}
-              icon={Syringe}
-              label="Vakc."
-            />
-            <DateStatusBadge
-              date={nextControlDate || pet.next_control_date}
-              icon={Stethoscope}
-              label="Kontrola"
-            />
-            {pet.weight_kg && (
-              <span className="badge badge-blue" style={{ gap: 4 }}>
-                <Weight size={10} strokeWidth={2} />
-                {pet.weight_kg} kg
-              </span>
-            )}
+            <DateStatusBadge date={nextVaccineDate || pet.next_vaccine_date} icon={Syringe} label="Vakc." />
+            <DateStatusBadge date={nextControlDate || pet.next_control_date} icon={Stethoscope} label="Pregled" />
           </div>
         </div>
       </motion.div>
 
-      {/* ── Basic info ── */}
-      <SectionCard title="Osnovni podaci" icon={FileText} iconClass="icon-blue" delay={0.08}>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-          {[
-            { label: "Rasa",             value: pet.breed     || "-" },
-            { label: "Datum rođenja",    value: pet.birth_date ? new Date(pet.birth_date + "T00:00:00").toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" }) : "-" },
-            { label: "Čip ID",           value: pet.chip_id   || "-", mono: true },
-            { label: "Telefon vlasnika", value: owner?.phone  || "-" },
-          ].map(({ label, value, mono }) => (
-            <div key={label}>
-              <dt className="text-xs font-600 mb-0.5" style={{ color: "var(--text-muted)", fontWeight: 600 }}>
-                {label}
-              </dt>
-              <dd
-                className={`font-500 ${mono ? "font-mono text-xs" : ""}`}
-                style={{ color: "var(--text-primary)", fontWeight: 500 }}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
+        {/* Left — Podaci o ljubimcu */}
+        <div className="lg:col-span-3">
+          <SectionCard
+            title="Podaci o ljubimcu"
+            icon={Info}
+            iconClass="icon-brand"
+            delay={0.06}
+            action={
+              <button
+                type="button"
+                onClick={() => editingBasics ? cancelBasicsEdit() : setEditingBasics(true)}
+                className="p-1.5 rounded-lg transition-colors"
+                style={{ color: "var(--text-muted)" }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "var(--brand)"
+                  e.currentTarget.style.background = "var(--brand-tint)"
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "var(--text-muted)"
+                  e.currentTarget.style.background = "transparent"
+                }}
               >
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </SectionCard>
-
-      {/* ── Critical three ── */}
-      <SectionCard title="Glavni podaci" icon={CalendarDays} iconClass="icon-amber" delay={0.13}>
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="vaccine" className="flex items-center gap-1.5 text-xs font-600" style={{ fontWeight: 600 }}>
-              <Syringe size={12} strokeWidth={2} style={{ color: "var(--amber)" }} />
-              Sledeća vakcinacija
-            </Label>
-            <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="control" className="flex items-center gap-1.5 text-xs font-600" style={{ fontWeight: 600 }}>
-              <Stethoscope size={12} strokeWidth={2} style={{ color: "var(--brand)" }} />
-              Sledeća kontrola
-            </Label>
-            <Input id="control" type="date" value={nextControlDate} onChange={(e) => setNextControlDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="weight" className="flex items-center gap-1.5 text-xs font-600" style={{ fontWeight: 600 }}>
-              <Weight size={12} strokeWidth={2} style={{ color: "var(--blue)" }} />
-              Težina (kg)
-            </Label>
-            <Input id="weight" type="number" step="0.1" min="0" placeholder="npr. 8.5" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
-          </div>
-        </div>
-      </SectionCard>
-
-      {/* ── Vet notes ── */}
-      <SectionCard title="Beleške (vidljivo samo veteru)" icon={FileText} iconClass="icon-muted" delay={0.18}>
-        <textarea
-          className="w-full min-h-28 rounded-xl text-sm resize-none px-3 py-2.5 transition-all"
-          style={{
-            background:  "var(--surface-raised)",
-            border:      "1px solid var(--border)",
-            color:       "var(--text-primary)",
-            lineHeight:  1.6,
-            outline:     "none",
-            fontFamily:  "inherit",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "var(--brand)"
-            e.currentTarget.style.boxShadow   = "0 0 0 3px var(--brand-subtle)"
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = "var(--border)"
-            e.currentTarget.style.boxShadow   = "none"
-          }}
-          placeholder="Alergije, hronična oboljenja, napomene..."
-          value={vetNotes}
-          onChange={(e) => setVetNotes(e.target.value)}
-        />
-      </SectionCard>
-
-      {/* ── Appointment history ── */}
-      {apptHistory.length > 0 && (
-        <SectionCard title="Istorija termina" icon={History} iconClass="icon-blue" delay={0.23}>
-          <div className="space-y-2">
-            {apptHistory.map((appt) => {
-              const d = new Date(appt.scheduled_at)
-              const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })
-              const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
-              const statusBadge =
-                appt.status === "confirmed"
-                  ? { cls: "badge-brand", label: "Potvrđen" }
-                  : appt.status === "cancelled"
-                  ? { cls: "badge-muted", label: "Otkazan" }
-                  : { cls: "badge-red",   label: "Nije došao" }
-              return (
+                {editingBasics ? <X size={14} strokeWidth={2} /> : <Pencil size={14} strokeWidth={2} />}
+              </button>
+            }
+          >
+            <dl className="space-y-0">
+              {basicsRows.map((row, i) => (
                 <div
-                  key={appt.id}
-                  className="flex items-center gap-3 py-2"
-                  style={{ borderBottom: "1px solid var(--border)" }}
+                  key={row.label}
+                  className={cn("py-2.5", i < basicsRows.length - 1 && "border-b")}
+                  style={{ borderColor: "var(--border)" }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate" style={{ fontWeight: 600 }}>{appt.service_name}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {dateStr} · {timeStr}
-                    </p>
-                  </div>
-                  <span className={`badge ${statusBadge.cls} shrink-0`}>{statusBadge.label}</span>
+                  <FieldLabel>{row.label}</FieldLabel>
+                  {editingBasics ? (
+                    <div className="mt-1">{row.editField}</div>
+                  ) : (
+                    <FieldValue mono={row.label === "ID mikročipa"}>{row.value}</FieldValue>
+                  )}
                 </div>
-              )
-            })}
-          </div>
-        </SectionCard>
-      )}
+              ))}
+            </dl>
+          </SectionCard>
+        </div>
 
-      {/* ── Save ── */}
+        {/* Middle — vet timeline */}
+        <div className="lg:col-span-5 space-y-4">
+          <SectionCard title="Istorija poseta" icon={History} iconClass="icon-brand" delay={0.1}>
+            <div className="relative pl-1">
+              <ul className="space-y-0">
+                <li className="relative pb-6 pl-7">
+                  <span
+                    className="absolute left-0 top-1.5 size-2.5 rounded-full z-[1]"
+                    style={{ background: "var(--brand)", boxShadow: "0 0 0 3px var(--brand-tint)" }}
+                  />
+                  <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm" style={{ fontWeight: 600 }}>Beleške</span>
+                    <span className="badge badge-muted" style={{ gap: 4 }}>
+                      <Lock size={10} strokeWidth={2} />
+                      Samo vet
+                    </span>
+                  </div>
+                  <textarea
+                    className="w-full min-h-[90px] rounded-xl text-sm resize-y px-3 py-2 transition-all"
+                    style={{
+                      background: "var(--blue-tint)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-primary)",
+                      lineHeight: 1.6,
+                      outline: "none",
+                      fontFamily: "inherit",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "var(--brand)"
+                      e.currentTarget.style.boxShadow = "0 0 0 3px var(--brand-subtle)"
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)"
+                      e.currentTarget.style.boxShadow = "none"
+                    }}
+                    placeholder="Beleške sa pregleda…"
+                    value={vetNotes}
+                    onChange={(e) => setVetNotes(e.target.value)}
+                  />
+                </li>
+
+                {apptHistory.map((appt, idx) => {
+                  const d = new Date(appt.scheduled_at)
+                  const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "short", year: "numeric" })
+                  const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
+                  const isLast = idx === apptHistory.length - 1
+                  const statusBadge =
+                    appt.status === "confirmed"
+                      ? { cls: "badge-brand", label: "Potvrđen" }
+                      : appt.status === "cancelled"
+                        ? { cls: "badge-muted", label: "Otkazan" }
+                        : { cls: "badge-red", label: "Nije došao" }
+                  const dotMuted = appt.status !== "confirmed"
+                  return (
+                    <li key={appt.id} className={`relative pl-7 ${isLast ? "" : "pb-6"}`}>
+                      {!isLast && (
+                        <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
+                      )}
+                      <span
+                        className="absolute left-0 top-1.5 size-2.5 rounded-full z-[1]"
+                        style={{
+                          background: dotMuted ? "var(--border-strong)" : "var(--brand)",
+                          boxShadow: dotMuted ? "none" : "0 0 0 3px var(--brand-tint)",
+                        }}
+                      />
+                      <div className="flex flex-wrap items-start justify-between gap-2 gap-y-1">
+                        <div className="min-w-0">
+                          <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>{appt.service_name}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{dateStr} · {timeStr}</p>
+                        </div>
+                        <span className={`badge shrink-0 ${statusBadge.cls}`}>{statusBadge.label}</span>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+
+              {apptHistory.length === 0 && (
+                <p className="text-sm pl-7" style={{ color: "var(--text-muted)" }}>Nema termina.</p>
+              )}
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* Right — Vakcina & Pregled */}
+        <div className="lg:col-span-4 space-y-4">
+          <SectionCard title="Vakcina" icon={Syringe} iconClass="icon-amber" delay={0.12}>
+            <div>
+              <FieldLabel>Sledeća vakcinacija</FieldLabel>
+              <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} className="mt-1.5" />
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Pregled" icon={Stethoscope} iconClass="icon-brand" delay={0.14}>
+            <div>
+              <FieldLabel>Sledeći pregled</FieldLabel>
+              <Input id="control" type="date" value={nextControlDate} onChange={(e) => setNextControlDate(e.target.value)} className="mt-1.5" />
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+
+      {/* Save */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.22 }}
-        className="flex items-center gap-3 pb-4"
+        transition={{ delay: 0.2 }}
+        className="flex flex-wrap items-center gap-3 pb-2"
       >
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="gap-2 text-white font-600"
-            style={{ background: "var(--brand)", border: "none", fontWeight: 600 }}
-            onMouseEnter={(e) => { if (!saving) e.currentTarget.style.background = "var(--brand-hover)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--brand)" }}
-          >
-            {saving
-              ? <span className="animate-spin inline-block">↻</span>
-              : <Save size={14} strokeWidth={2} />
-            }
+          <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
+            {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
             {saving ? "Čuvanje..." : "Sačuvaj izmene"}
-          </Button>
+          </button>
         </motion.div>
-
         {saved && (
           <motion.div
             initial={{ opacity: 0, x: -4 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-1.5 text-sm font-600"
+            className="flex items-center gap-1.5 text-sm"
             style={{ color: "var(--green)", fontWeight: 600 }}
           >
             <CheckCircle size={15} strokeWidth={2.25} />
@@ -461,9 +691,7 @@ export default function PetProfilePage() {
           </motion.div>
         )}
         {error && (
-          <span className="text-sm font-500" style={{ color: "var(--red)", fontWeight: 500 }}>
-            {error}
-          </span>
+          <span className="text-sm" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</span>
         )}
       </motion.div>
     </div>

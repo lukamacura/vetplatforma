@@ -11,6 +11,11 @@ import type { Pet, Service, Clinic, ClinicHours } from "@/lib/types"
 
 type OccupiedInterval = { start: number; end: number }
 
+function toLocalDateStr(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function overlaps(
   slotStart: number,
   slotEnd: number,
@@ -38,10 +43,7 @@ function generateSlots(
     const slotStart = baseDate.getTime() + min * 60_000
     const slotEnd   = slotStart + durationMin * 60_000
     if (!overlaps(slotStart, slotEnd, intervals)) {
-      const h = Math.floor(min / 60)
-      const m = min % 60
-      const pad = (n: number) => n.toString().padStart(2, "0")
-      slots.push(`${date}T${pad(h)}:${pad(m)}:00`)
+      slots.push(new Date(slotStart).toISOString())
     }
   }
   return slots
@@ -63,7 +65,7 @@ function getAvailableDays(hoursMap: Map<number, ClinicHours>): string[] {
     } else {
       if (weekday === 0 || weekday === 6) continue
     }
-    days.push(d.toISOString().slice(0, 10))
+    days.push(toLocalDateStr(d))
   }
   return days
 }
@@ -157,16 +159,16 @@ function BookingPageInner() {
     if (!selectedDay || !selectedService || !selectedClinic) return
     async function loadSlots() {
       const supabase = createClient()
-      const dayStart = `${selectedDay}T00:00:00`
-      const dayEnd   = `${selectedDay}T23:59:59`
+      const dayStartDate = new Date(`${selectedDay}T00:00:00`)
+      const dayEndDate   = new Date(`${selectedDay}T23:59:59`)
 
       const { data: apptData } = await supabase
         .from("appointments")
         .select("scheduled_at, service_id")
         .eq("clinic_id", selectedClinic!.id)
         .eq("status", "confirmed")
-        .gte("scheduled_at", dayStart)
-        .lte("scheduled_at", dayEnd)
+        .gte("scheduled_at", dayStartDate.toISOString())
+        .lte("scheduled_at", dayEndDate.toISOString())
 
       const appts = apptData ?? []
       let intervals: OccupiedInterval[] = []
