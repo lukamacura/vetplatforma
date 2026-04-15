@@ -92,3 +92,34 @@ export async function createCheckoutSession(): Promise<void> {
 
   redirect(session.url!)
 }
+
+export async function createBillingPortalSession(): Promise<void> {
+  const stripe   = getStripe()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect("/login")
+
+  const { data: profile } = await supabase
+    .from("profiles").select("clinic_id").eq("id", user.id).single()
+  let clinicId = profile?.clinic_id
+  if (!clinicId) {
+    const { data: owned } = await supabase.from("clinics").select("id").eq("owner_id", user.id).single()
+    clinicId = owned?.id ?? null
+  }
+  if (!clinicId) redirect("/dashboard")
+
+  const serviceClient = getServiceClient()
+  const { data: clinic } = await serviceClient
+    .from("clinics").select("stripe_customer_id").eq("id", clinicId).single()
+
+  const customerId = (clinic as { stripe_customer_id: string | null } | null)?.stripe_customer_id
+  if (!customerId) redirect("/dashboard/upgrade")
+
+  const origin  = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const session = await stripe.billingPortal.sessions.create({
+    customer:   customerId,
+    return_url: `${origin}/dashboard/podesavanja`,
+  })
+
+  redirect(session.url)
+}

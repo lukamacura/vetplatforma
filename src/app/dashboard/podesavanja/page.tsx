@@ -6,7 +6,7 @@ import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
-import { createCheckoutSession } from "@/app/dashboard/upgrade/actions"
+import { createCheckoutSession, createBillingPortalSession } from "@/app/dashboard/upgrade/actions"
 import type { ClinicHours } from "@/lib/types"
 
 const WEEKDAYS = [
@@ -41,6 +41,7 @@ export default function PodesavanjaPage() {
   const [hours,               setHours]               = useState<HoursRow[]>(DEFAULT_HOURS)
   const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
   const [planExpiry,          setPlanExpiry]          = useState<string | null>(null)
+  const [hasCardOnFile,       setHasCardOnFile]       = useState(false)
 
   const [savingClinic, setSavingClinic] = useState(false)
   const [savingPhone,  setSavingPhone]  = useState(false)
@@ -75,7 +76,7 @@ export default function PodesavanjaPage() {
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id, phone").eq("id", user.id).single()
 
-      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null }) {
+      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null }) {
         setClinicName(c.name)
         setClinicSlug(c.slug)
         let status = c.subscription_status ?? "trial"
@@ -86,7 +87,13 @@ export default function PodesavanjaPage() {
           if (exp.getTime() < Date.now()) status = "expired"
         }
         setSubscriptionStatus(status)
-        if (status === "active" && c.subscription_current_period_end) {
+
+        // Card on file = Stripe subscription exists (webhook set period_end).
+        // Distinguishes "trial, no card" from "trial, card entered via Checkout".
+        const cardOnFile = !!c.stripe_customer_id && !!c.subscription_current_period_end
+        setHasCardOnFile(cardOnFile)
+
+        if (cardOnFile && c.subscription_current_period_end) {
           setPlanExpiry(new Date(c.subscription_current_period_end).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
         } else if (c.trial_started_at) {
           const exp = new Date(c.trial_started_at)
@@ -97,11 +104,11 @@ export default function PodesavanjaPage() {
 
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
         if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end").eq("id", cid).single()
+        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id").eq("id", cid).single()
         if (clinic) applyClinic(clinic)
       }
       setPhone(profile?.phone ?? "")
@@ -207,17 +214,17 @@ export default function PodesavanjaPage() {
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.24 }}
         className="rounded-2xl p-5"
         style={{
-          background: subscriptionStatus === "active"
+          background: subscriptionStatus === "active" || hasCardOnFile
             ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.04) 100%)"
             : subscriptionStatus === "expired" || subscriptionStatus === "cancelled"
               ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.04) 100%)"
               : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.04) 100%)",
-          border: `1px solid ${subscriptionStatus === "active" ? "rgba(22,163,74,0.2)" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "rgba(220,38,38,0.2)" : "rgba(43,181,160,0.25)"}`,
+          border: `1px solid ${subscriptionStatus === "active" || hasCardOnFile ? "rgba(22,163,74,0.2)" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "rgba(220,38,38,0.2)" : "rgba(43,181,160,0.25)"}`,
         }}
       >
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-start gap-3">
-            <div className={`icon-md shrink-0 ${subscriptionStatus === "active" ? "icon-green" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "icon-red" : "icon-brand"}`}>
+            <div className={`icon-md shrink-0 ${subscriptionStatus === "active" || hasCardOnFile ? "icon-green" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "icon-red" : "icon-brand"}`}>
               <CreditCard size={18} strokeWidth={1.75} />
             </div>
             <div>
@@ -241,6 +248,16 @@ export default function PodesavanjaPage() {
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
                   )}
                 </>
+              ) : hasCardOnFile ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 size={14} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                    <span className="text-base" style={{ fontWeight: 700, color: "var(--green)" }}>Probni period · Kartica potvrđena</span>
+                  </div>
+                  {planExpiry && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Prvo plaćanje: {planExpiry}</p>
+                  )}
+                </>
               ) : (
                 <>
                   <span className="text-base" style={{ fontWeight: 700, color: "var(--brand)" }}>Probni period</span>
@@ -252,7 +269,24 @@ export default function PodesavanjaPage() {
             </div>
           </div>
 
-          {subscriptionStatus !== "active" && (
+          {hasCardOnFile || subscriptionStatus === "active" ? (
+            <form action={() => startTransition(() => createBillingPortalSession())}>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-xl px-5 py-2.5 text-sm shrink-0 transition-opacity"
+                style={{
+                  background: "var(--surface-raised)",
+                  color:      "var(--text-primary)",
+                  border:     "1px solid var(--border)",
+                  fontWeight: 600,
+                  opacity:    isPending ? 0.7 : 1,
+                }}
+              >
+                {isPending ? "Preusmeravanje..." : "Podesi pretplatu"}
+              </button>
+            </form>
+          ) : (
             <form action={() => startTransition(() => createCheckoutSession())}>
               <button
                 type="submit"
