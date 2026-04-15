@@ -1,58 +1,94 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Search, UserPlus, Phone, PawPrint, Copy, Check, Users } from "lucide-react"
+import {
+  Search,
+  UserPlus,
+  Phone,
+  PawPrint,
+  Copy,
+  Check,
+  Syringe,
+  Stethoscope,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
-import type { Pet, Profile } from "@/lib/types"
+import { stagger } from "@/lib/motion"
+import type { Pet, Profile, Species, Gender } from "@/lib/types"
 
 const SPECIES_EMOJI: Record<string, string> = {
   dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
 }
-
-interface ClientWithPets {
-  owner: Profile & { connected_at: string }
-  pets: Pet[]
+const SPECIES_LABEL: Record<Species, string> = {
+  dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
+}
+const GENDER_LABEL: Record<Gender, string> = {
+  male: "M", female: "Ž", unknown: "",
 }
 
-/* ── Pet chip — color encodes health status ── */
-function PetChip({ pet, onClick }: { pet: Pet; onClick: () => void }) {
-  const isOverdue =
-    (pet.next_vaccine_date && new Date(pet.next_vaccine_date) < new Date()) ||
-    (pet.next_control_date && new Date(pet.next_control_date) < new Date())
+interface PetRow {
+  pet: Pet
+  owner: Profile & { connected_at: string }
+}
 
-  const hasUpcoming =
-    !isOverdue &&
-    (pet.next_vaccine_date || pet.next_control_date)
+function ageLabelShort(birthDate: string | null): string | null {
+  if (!birthDate) return null
+  const b = new Date(birthDate + "T12:00:00")
+  const today = new Date()
+  let years = today.getFullYear() - b.getFullYear()
+  const md = today.getMonth() - b.getMonth()
+  if (md < 0 || (md === 0 && today.getDate() < b.getDate())) years--
+  if (years < 1) {
+    const months = (today.getFullYear() - b.getFullYear()) * 12 + (today.getMonth() - b.getMonth())
+    const m = Math.max(0, months)
+    if (m === 0) return "<1m"
+    return `${m}m`
+  }
+  return `${years}g`
+}
 
-  // red = overdue, amber = upcoming, green = scheduled & ok, muted = no dates set
-  const cls = isOverdue
-    ? "badge badge-red"
-    : hasUpcoming
-    ? "badge badge-amber"
-    : pet.next_vaccine_date || pet.next_control_date
-    ? "badge badge-green"
-    : "badge badge-muted"
+function dateStatus(d: string | null): "overdue" | "soon" | "ok" | null {
+  if (!d) return null
+  const days = Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return "overdue"
+  if (days <= 14) return "soon"
+  return "ok"
+}
+
+function formatDateShort(d: string) {
+  return new Date(d).toLocaleDateString("sr-Latn-RS", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  })
+}
+
+function StatusDot({ date, icon: Icon }: { date: string | null; icon: React.ElementType }) {
+  const status = dateStatus(date)
+  if (!status || !date) return null
+
+  const cfg = {
+    overdue: { cls: "badge badge-red", pulse: true },
+    soon:    { cls: "badge badge-amber", pulse: false },
+    ok:      { cls: "badge badge-green", pulse: false },
+  }[status]
 
   return (
-    <motion.button
-      whileHover={{ scale: 1.06, y: -1 }}
-      whileTap={{ scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 420, damping: 22 }}
-      onClick={(e) => { e.stopPropagation(); onClick() }}
-      className={cls}
-    >
-      {isOverdue && <span className="pulse-dot" />}
-      <span>{SPECIES_EMOJI[pet.species]}</span>
-      {pet.name}
-    </motion.button>
+    <span className={cfg.cls} style={{ gap: 4, fontSize: 10 }}>
+      {cfg.pulse && <span className="pulse-dot" />}
+      <Icon size={10} strokeWidth={2.5} />
+      {formatDateShort(date)}
+    </span>
   )
 }
 
-/* ── Copy-link button ── */
+type FilterMode = "all" | "overdue" | "upcoming" | "ok"
+
 function CopyLinkButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false)
 
@@ -63,115 +99,123 @@ function CopyLinkButton({ url }: { url: string }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-        <Button
-          size="sm"
-          onClick={handleCopy}
-          className="gap-2 text-white font-600"
-          style={{
-            background:   copied ? "var(--green)"  : "var(--brand)",
-            border:       "none",
-            fontWeight:   600,
-            transition:   "background .2s",
-          }}
-        >
-          {copied ? (
-            <><Check size={14} strokeWidth={2.5} /> Kopirano!</>
-          ) : (
-            <><Copy size={14} strokeWidth={1.75} /><UserPlus size={14} strokeWidth={1.75} /> Pozovi klijente</>
-          )}
-        </Button>
-      </motion.div>
-      <span className="text-xs font-mono truncate max-w-64" style={{ color: "var(--text-muted)" }}>
-        {url}
-      </span>
-    </div>
-  )
-}
-
-/* ── Client card ── */
-function ClientCard({ owner, pets, index }: {
-  owner: ClientWithPets["owner"]
-  pets: Pet[]
-  index: number
-}) {
-  const router = useRouter()
-  const hasOverdue = pets.some(
-    (p) =>
-      (p.next_vaccine_date && new Date(p.next_vaccine_date) < new Date()) ||
-      (p.next_control_date && new Date(p.next_control_date) < new Date())
-  )
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.24 }}
-      whileHover={{ y: -2, boxShadow: "0 6px 22px rgba(0,0,0,0.08)" }}
-      className="solid-card rounded-2xl p-4"
-      style={{ transition: "box-shadow .2s, transform .2s" }}
-    >
-      <div className="flex items-start gap-3.5">
-        {/* Avatar — red ring if any pet is overdue */}
-        <div
-          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-700"
-          style={{
-            background: hasOverdue ? "var(--red-tint)"   : "var(--brand-tint)",
-            color:      hasOverdue ? "var(--red)"        : "var(--brand)",
-            fontWeight: 700,
-            outline: hasOverdue ? "2px solid var(--red)" : "none",
-            outlineOffset: 2,
-          }}
-        >
-          {owner.full_name?.charAt(0)?.toUpperCase() ?? "?"}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="text-sm font-600" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-              {owner.full_name || "—"}
-            </span>
-            {owner.phone && (
-              <span className="badge badge-muted" style={{ gap: 4 }}>
-                <Phone size={10} strokeWidth={2} />
-                {owner.phone}
-              </span>
-            )}
-            <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>
-              od{" "}
-              {new Date(owner.connected_at).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}
-            </span>
-          </div>
-
-          {pets.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {pets.map((pet) => (
-                <PetChip
-                  key={pet.id}
-                  pet={pet}
-                  onClick={() => router.push(`/dashboard/pacijenti/${pet.id}`)}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs italic" style={{ color: "var(--text-muted)" }}>
-              Nema dodanih ljubimaca
-            </p>
-          )}
-        </div>
-      </div>
+    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+      <Button
+        size="sm"
+        onClick={handleCopy}
+        className="gap-2 text-white font-600"
+        style={{
+          background: copied ? "var(--green)" : "var(--brand)",
+          border: "none",
+          fontWeight: 600,
+          transition: "background .2s",
+        }}
+      >
+        {copied ? (
+          <><Check size={14} strokeWidth={2.5} /> Kopirano!</>
+        ) : (
+          <><Copy size={14} strokeWidth={1.75} /><UserPlus size={14} strokeWidth={1.75} /> Pozovi klijente</>
+        )}
+      </Button>
     </motion.div>
   )
 }
 
-/* ── Page ── */
+function PetRowCard({ row, index, onClick }: { row: PetRow; index: number; onClick: () => void }) {
+  const { pet, owner } = row
+  const isOverdue =
+    (pet.next_vaccine_date && new Date(pet.next_vaccine_date) < new Date()) ||
+    (pet.next_control_date && new Date(pet.next_control_date) < new Date())
+
+  const age = ageLabelShort(pet.birth_date)
+  const genderStr = pet.gender ? GENDER_LABEL[pet.gender] : ""
+  const subtitleParts = [SPECIES_LABEL[pet.species]]
+  if (pet.breed) subtitleParts.push(pet.breed)
+  if (genderStr) subtitleParts.push(genderStr)
+  if (age) subtitleParts.push(age)
+  if (pet.weight_kg) subtitleParts.push(`${pet.weight_kg}kg`)
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      variants={stagger.row}
+      whileHover={{ y: -1, boxShadow: "0 4px 18px rgba(0,0,0,0.07)" }}
+      className="solid-card rounded-xl w-full text-left cursor-pointer"
+    >
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Pet avatar */}
+        <div
+          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg select-none"
+          style={{
+            background: isOverdue ? "var(--red-tint)" : "var(--surface-raised)",
+            outline: isOverdue ? "2px solid var(--red)" : "none",
+            outlineOffset: 1,
+          }}
+        >
+          {SPECIES_EMOJI[pet.species]}
+        </div>
+
+        {/* Pet info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm truncate" style={{ fontWeight: 650, color: "var(--text-primary)" }}>
+              {pet.name}
+            </span>
+            {isOverdue && (
+              <AlertCircle size={13} strokeWidth={2.5} style={{ color: "var(--red)", flexShrink: 0 }} />
+            )}
+          </div>
+          <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+            {subtitleParts.join(" · ")}
+          </p>
+        </div>
+
+        {/* Health dates — hidden on mobile, visible on sm+ */}
+        <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+          <StatusDot date={pet.next_vaccine_date} icon={Syringe} />
+          <StatusDot date={pet.next_control_date} icon={Stethoscope} />
+        </div>
+
+        {/* Divider */}
+        <div className="hidden sm:block w-px h-8 shrink-0" style={{ background: "var(--border)" }} />
+
+        {/* Owner info */}
+        <div className="hidden sm:block min-w-0 shrink-0" style={{ width: 180 }}>
+          <p className="text-xs truncate" style={{ color: "var(--text-secondary)", fontWeight: 550 }}>
+            {owner.full_name || "—"}
+          </p>
+          {owner.phone && (
+            <p className="text-[11px] mt-0.5 flex items-center gap-1 truncate" style={{ color: "var(--text-muted)" }}>
+              <Phone size={9} strokeWidth={2} className="shrink-0" />
+              {owner.phone}
+            </p>
+          )}
+        </div>
+
+        <ChevronRight size={16} strokeWidth={1.75} className="shrink-0" style={{ color: "var(--text-muted)" }} />
+      </div>
+
+      {/* Mobile-only: health + owner row */}
+      <div className="sm:hidden px-4 pb-3 flex items-center gap-2 flex-wrap">
+        <StatusDot date={pet.next_vaccine_date} icon={Syringe} />
+        <StatusDot date={pet.next_control_date} icon={Stethoscope} />
+        <span className="ml-auto text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+          {owner.full_name}
+          {owner.phone && ` · ${owner.phone}`}
+        </span>
+      </div>
+    </motion.button>
+  )
+}
+
 export default function PatientsPage() {
-  const [clients,    setClients]    = useState<ClientWithPets[]>([])
+  const router = useRouter()
+  const [rows, setRows] = useState<PetRow[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [filterMode, setFilterMode] = useState<FilterMode>("all")
   const [clinicSlug, setClinicSlug] = useState<string | null>(null)
-  const [loading,    setLoading]    = useState(true)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -210,117 +254,179 @@ export default function PatientsPage() {
         supabase.from("pets").select("*").in("owner_id", ownerIds).order("name"),
       ])
 
-      const profileMap   = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]))
-      const petsByOwner: Record<string, Pet[]> = {}
-      for (const pet of petsData ?? []) {
-        if (!petsByOwner[pet.owner_id]) petsByOwner[pet.owner_id] = []
-        petsByOwner[pet.owner_id].push(pet)
-      }
+      const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]))
+      const connMap = Object.fromEntries(connections.map((c) => [c.owner_id, c.connected_at]))
 
-      setClients(connections.map((c) => ({
+      const petRows: PetRow[] = (petsData ?? []).map((pet) => ({
+        pet: pet as Pet,
         owner: {
-          id:          c.owner_id,
-          role:        "owner" as const,
-          full_name:   profileMap[c.owner_id]?.full_name ?? "—",
-          phone:       profileMap[c.owner_id]?.phone     ?? null,
-          clinic_id:   null,
-          created_at:  profileMap[c.owner_id]?.created_at ?? c.connected_at,
-          connected_at: c.connected_at,
+          id: pet.owner_id,
+          role: "owner" as const,
+          full_name: profileMap[pet.owner_id]?.full_name ?? "—",
+          phone: profileMap[pet.owner_id]?.phone ?? null,
+          clinic_id: null,
+          created_at: profileMap[pet.owner_id]?.created_at ?? connMap[pet.owner_id],
+          connected_at: connMap[pet.owner_id],
         },
-        pets: petsByOwner[c.owner_id] ?? [],
-      })))
+      }))
+
+      setRows(petRows)
       setLoading(false)
     }
     load()
   }, [])
 
-  const filtered = clients.filter((c) => {
-    const q = searchTerm.toLowerCase()
-    return (
-      c.owner.full_name?.toLowerCase().includes(q) ||
-      c.owner.phone?.toLowerCase().includes(q) ||
-      c.pets.some((p) => p.name.toLowerCase().includes(q))
-    )
-  })
+  const stats = useMemo(() => {
+    let overdue = 0
+    let upcoming = 0
+    const ownerSet = new Set<string>()
+    for (const { pet, owner } of rows) {
+      ownerSet.add(owner.id)
+      const vs = dateStatus(pet.next_vaccine_date)
+      const cs = dateStatus(pet.next_control_date)
+      if (vs === "overdue" || cs === "overdue") overdue++
+      else if (vs === "soon" || cs === "soon") upcoming++
+    }
+    return { total: rows.length, owners: ownerSet.size, overdue, upcoming }
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    let result = rows
+
+    if (filterMode !== "all") {
+      result = result.filter(({ pet }) => {
+        const vs = dateStatus(pet.next_vaccine_date)
+        const cs = dateStatus(pet.next_control_date)
+        if (filterMode === "overdue") return vs === "overdue" || cs === "overdue"
+        if (filterMode === "upcoming") return vs === "soon" || cs === "soon"
+        if (filterMode === "ok") return (vs === "ok" || vs === null) && (cs === "ok" || cs === null)
+        return true
+      })
+    }
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim()
+      result = result.filter(({ pet, owner }) =>
+        pet.name.toLowerCase().includes(q) ||
+        (pet.breed ?? "").toLowerCase().includes(q) ||
+        (pet.chip_id ?? "").toLowerCase().includes(q) ||
+        owner.full_name?.toLowerCase().includes(q) ||
+        (owner.phone ?? "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))
+      )
+    }
+
+    return result
+  }, [rows, searchTerm, filterMode])
 
   const joinUrl = clinicSlug
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/join/${clinicSlug}`
     : null
 
-  const totalPets  = clients.reduce((n, c) => n + c.pets.length, 0)
-  const overdueCount = clients.reduce((n, c) => n + c.pets.filter(
-    (p) =>
-      (p.next_vaccine_date && new Date(p.next_vaccine_date) < new Date()) ||
-      (p.next_control_date && new Date(p.next_control_date) < new Date())
-  ).length, 0)
+  const filterButtons: { key: FilterMode; label: string; count?: number; color?: string }[] = [
+    { key: "all", label: "Svi", count: stats.total },
+    { key: "overdue", label: "Zakasneli", count: stats.overdue, color: "var(--red)" },
+    { key: "upcoming", label: "Uskoro", count: stats.upcoming, color: "var(--amber)" },
+    { key: "ok", label: "U redu", color: "var(--green)" },
+  ]
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="w-full space-y-5"
+    >
 
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4"
+        variants={stagger.item}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
       >
         <div>
-          <h1 className="text-2xl">Vaši pacijenti</h1>
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {!loading && clients.length > 0 && (
-              <>
-                <span className="badge badge-brand">
-                  <Users size={10} strokeWidth={2} />
-                  {clients.length} {clients.length === 1 ? "klijent" : clients.length < 5 ? "klijenta" : "klijenata"}
-                </span>
-                <span className="badge badge-muted">
-                  <PawPrint size={10} strokeWidth={2} />
-                  {totalPets} ljubimaca
-                </span>
-                {overdueCount > 0 && (
-                  <span className="badge badge-red">
-                    <span className="pulse-dot" />
-                    {overdueCount} {overdueCount === 1 ? "zakasneli" : "zakasnelih"}
-                  </span>
-                )}
-              </>
-            )}
-            {loading && (
-              <span className="text-sm" style={{ color: "var(--text-muted)" }}>Učitavanje...</span>
-            )}
-          </div>
+          <h1 className="text-2xl">Pacijenti</h1>
+          {!loading && rows.length > 0 && (
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+              {stats.total} {stats.total === 1 ? "ljubimac" : stats.total < 5 ? "ljubimca" : "ljubimaca"} · {stats.owners} {stats.owners === 1 ? "vlasnik" : stats.owners < 5 ? "vlasnika" : "vlasnika"}
+            </p>
+          )}
         </div>
         {joinUrl && <CopyLinkButton url={joinUrl} />}
       </motion.div>
 
-      {/* Search */}
+      {/* Search + Filters */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.1 }}
-        className="relative max-w-sm"
+        variants={stagger.item}
+        className="flex flex-col sm:flex-row gap-3"
       >
-        <Search
-          size={14}
-          strokeWidth={2}
-          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ color: "var(--text-muted)" }}
-        />
-        <Input
-          placeholder="Pretraži po imenu, telefonu ili ljubimcu..."
-          className="pl-9"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <div className="relative flex-1 max-w-md">
+          <Search
+            size={14}
+            strokeWidth={2}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: "var(--text-muted)" }}
+          />
+          <Input
+            placeholder="Ime ljubimca, vlasnik, telefon, čip..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {filterButtons.map((fb) => {
+            const active = filterMode === fb.key
+            return (
+              <button
+                key={fb.key}
+                type="button"
+                onClick={() => setFilterMode(fb.key)}
+                className="px-3 py-1.5 rounded-lg text-xs transition-all"
+                style={{
+                  fontWeight: active ? 650 : 500,
+                  background: active ? (fb.color ? `color-mix(in srgb, ${fb.color} 12%, transparent)` : "var(--brand-tint)") : "transparent",
+                  color: active ? (fb.color ?? "var(--brand)") : "var(--text-muted)",
+                  border: active ? `1px solid color-mix(in srgb, ${fb.color ?? "var(--brand)"} 25%, transparent)` : "1px solid transparent",
+                }}
+              >
+                {fb.label}
+                {fb.count !== undefined && fb.count > 0 && (
+                  <span
+                    className="ml-1.5 inline-flex items-center justify-center rounded-full text-[10px] min-w-[18px] h-[18px] px-1"
+                    style={{
+                      fontWeight: 700,
+                      background: active ? (fb.color ?? "var(--brand)") : "var(--surface-raised)",
+                      color: active ? "#fff" : "var(--text-muted)",
+                    }}
+                  >
+                    {fb.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </motion.div>
+
+      {/* Column header hint — desktop only */}
+      {!loading && filtered.length > 0 && (
+        <div className="hidden sm:flex items-center gap-3 px-4 text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}>
+          <div className="w-10 shrink-0" />
+          <div className="flex-1">Pacijent</div>
+          <div className="shrink-0" style={{ width: "auto" }}>Status</div>
+          <div className="w-px h-3 shrink-0" />
+          <div className="shrink-0" style={{ width: 180 }}>Vlasnik</div>
+          <div className="w-4 shrink-0" />
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
             <div
               key={i}
-              className="h-20 rounded-2xl animate-pulse"
+              className="h-16 rounded-xl animate-pulse"
               style={{ background: "var(--surface-raised)" }}
             />
           ))}
@@ -335,23 +441,33 @@ export default function PatientsPage() {
             <PawPrint size={24} strokeWidth={1.75} />
           </div>
           <p className="font-600 text-sm mb-1" style={{ fontWeight: 600 }}>
-            {clients.length === 0 ? "Još nema povezanih klijenata" : "Nema rezultata pretrage"}
+            {rows.length === 0 ? "Još nema pacijenata" : "Nema rezultata pretrage"}
           </p>
-          {clients.length === 0 && joinUrl && (
+          {rows.length === 0 && joinUrl && (
             <p className="text-xs max-w-xs mx-auto mt-1" style={{ color: "var(--text-muted)" }}>
               Podelite link sa vlasnicima — oni sami povežu profil i dodaju ljubimce.
+            </p>
+          )}
+          {rows.length > 0 && searchTerm && (
+            <p className="text-xs max-w-xs mx-auto mt-1" style={{ color: "var(--text-muted)" }}>
+              Pokušajte drugi termin pretrage.
             </p>
           )}
         </motion.div>
       ) : (
         <AnimatePresence mode="popLayout">
-          <div className="space-y-2.5">
-            {filtered.map(({ owner, pets }, i) => (
-              <ClientCard key={owner.id} owner={owner} pets={pets} index={i} />
+          <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-1.5">
+            {filtered.map((row, i) => (
+              <PetRowCard
+                key={row.pet.id}
+                row={row}
+                index={i}
+                onClick={() => router.push(`/dashboard/pacijenti/${row.pet.id}`)}
+              />
             ))}
-          </div>
+          </motion.div>
         </AnimatePresence>
       )}
-    </div>
+    </motion.div>
   )
 }

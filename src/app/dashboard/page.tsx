@@ -5,6 +5,7 @@ import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, CalendarP
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { stagger } from "@/lib/motion"
 import type { AppointmentWithDetails } from "@/lib/types"
 
 function formatTime(iso: string) {
@@ -43,22 +44,17 @@ function StatCard({
   label,
   value,
   iconClass,
-  delay,
 }: {
   icon: React.ElementType
   label: string
   value: number | string
   iconClass: string
-  delay: number
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.28 }}
+      variants={stagger.item}
       whileHover={{ y: -3, boxShadow: "0 8px 28px rgba(0,0,0,0.09)" }}
       className="solid-card rounded-2xl p-5 cursor-default"
-      style={{ transition: "box-shadow .2s, transform .2s" }}
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
@@ -97,23 +93,14 @@ function AppointmentRow({
 
   const timeColor = isNoShow || isCancelled ? "var(--text-muted)" : isNow ? "var(--brand)" : isPast ? "var(--text-muted)" : "var(--blue)"
 
+  const isActive = isNow && !isNoShow && !isCancelled
+
   return (
     <motion.div
-      initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.045, duration: 0.22 }}
-      className="flex items-center gap-4 rounded-xl px-4 py-3 cursor-default"
+      variants={stagger.row}
+      className={`appt-row flex items-center gap-4 rounded-xl px-4 py-3 cursor-default ${isActive ? "appt-row-active" : ""}`}
       style={{
-        background:  isNow && !isNoShow && !isCancelled ? "var(--brand-tint)" : "transparent",
-        border:      `1px solid ${isNow && !isNoShow && !isCancelled ? "rgba(43,181,160,0.28)" : "var(--border)"}`,
-        opacity:     (isPast || isNoShow || isCancelled) ? 0.5 : 1,
-        transition:  "background .15s, border-color .15s",
-      }}
-      onMouseEnter={(e) => {
-        if (!isNow || isNoShow || isCancelled) e.currentTarget.style.background = "var(--surface-raised)"
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = isNow && !isNoShow && !isCancelled ? "var(--brand-tint)" : "transparent"
+        opacity: (isPast || isNoShow || isCancelled) ? 0.5 : 1,
       }}
     >
       {/* Time column */}
@@ -176,15 +163,7 @@ function AppointmentRow({
             {isToday && (isPast || isNow) && (
               <button
                 onClick={() => onNoShow(appt.id)}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors"
-                style={{
-                  fontWeight: 600,
-                  background: "var(--red-tint)",
-                  color: "var(--red-text)",
-                  border: "1px solid rgba(220,38,38,0.15)",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--red)"; e.currentTarget.style.color = "#fff" }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "var(--red-tint)"; e.currentTarget.style.color = "var(--red-text)" }}
+                className="no-show-btn flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
               >
                 <UserX size={11} strokeWidth={2} />
                 Nije došao
@@ -353,15 +332,15 @@ export default function DashboardPage() {
     : `Zakazivanja — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
 
   return (
-    <div className="space-y-7">
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="space-y-7"
+    >
 
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="flex items-start justify-between gap-4"
-      >
+      <motion.div variants={stagger.item} className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "var(--brand)", fontWeight: 700 }}>
             {selectedDateLabel}
@@ -383,13 +362,12 @@ export default function DashboardPage() {
         </Link>
       </motion.div>
 
-      {/* Mini month calendar */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.06, duration: 0.26 }}
-        className="solid-card rounded-2xl p-4"
-      >
+      {/* Bento grid: Calendar + Stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
+
+      {/* Mini month calendar — spans 2 rows on desktop */}
+      <motion.div variants={stagger.item} className="lg:col-span-2 lg:row-span-2 solid-card rounded-2xl p-4">
+
         {/* Month header */}
         <div className="flex items-center justify-between mb-3">
           <button
@@ -461,28 +439,13 @@ export default function DashboardPage() {
               <button
                 key={day.toISOString()}
                 onClick={() => setSelectedDate(new Date(day))}
-                className="flex flex-col items-center justify-center py-1 transition-all"
-                style={{ cursor: "pointer", background: "transparent", border: "none" }}
-                onMouseEnter={(e) => {
-                  const inner = e.currentTarget.querySelector(".day-inner") as HTMLElement | null
-                  if (inner && !isSelected) inner.style.background = isDayToday ? "var(--brand-tint)" : "var(--surface-raised)"
-                }}
-                onMouseLeave={(e) => {
-                  const inner = e.currentTarget.querySelector(".day-inner") as HTMLElement | null
-                  if (inner) inner.style.background = isSelected ? "var(--brand)" : isDayToday ? "var(--brand-tint)" : "transparent"
-                }}
+                className="cal-day flex flex-col items-center justify-center py-1"
+                data-selected={isSelected}
+                data-today={isDayToday}
               >
                 <div
-                  className="day-inner flex items-center justify-center rounded-full transition-all"
-                  style={{
-                    width: 30,
-                    height: 30,
-                    background: isSelected
-                      ? "var(--brand)"
-                      : isDayToday
-                      ? "var(--brand-tint)"
-                      : "transparent",
-                  }}
+                  className="cal-day-inner flex items-center justify-center rounded-full transition-all"
+                  style={{ width: 30, height: 30 }}
                 >
                   <span
                     style={{
@@ -537,31 +500,25 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Stat cards — stacked on the right in bento */}
         <StatCard
           icon={CalendarDays}
           label={statLabel}
           value={loading ? "—" : appointments.filter((a) => a.status === "confirmed").length}
           iconClass="icon-blue"
-          delay={0.08}
         />
         <StatCard
           icon={Users}
           label="Povezani klijenti"
           value={loading ? "—" : connectedCount}
           iconClass="icon-brand"
-          delay={0.14}
         />
+
       </div>
 
-      {/* Schedule */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.18, duration: 0.28 }}
-        className="solid-card rounded-2xl overflow-hidden"
-      >
+      {/* Schedule — full width */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden">
+
         {/* Card header */}
         <div
           className="flex items-center justify-between px-5 py-4"
@@ -618,14 +575,14 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
               {appointments.map((a, i) => (
                 <AppointmentRow key={a.id} appt={a} index={i} isToday={isToday} onNoShow={handleNoShow} />
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }

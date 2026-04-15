@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { stagger } from "@/lib/motion"
 import type { Service } from "@/lib/types"
 
 const DURATIONS: (15 | 30 | 60)[] = [15, 30, 60]
@@ -19,9 +20,7 @@ function ServiceRow({ service, onToggle, index }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.22 }}
+      variants={stagger.row}
       className="flex items-center gap-3 rounded-xl px-4 py-3.5"
       style={{
         background: "var(--surface-raised)",
@@ -145,15 +144,16 @@ export default function ServicesPage() {
   const inactiveCount = services.filter((s) => !s.is_active).length
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="max-w-4xl mx-auto space-y-6"
+    >
 
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="flex justify-between items-start gap-4"
-      >
+      <motion.div variants={stagger.item} className="flex justify-between items-start gap-4">
+
         <div>
           <h1 className="text-2xl">Upravljanje uslugama</h1>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -178,10 +178,8 @@ export default function ServicesPage() {
           <DialogTrigger asChild>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
               <Button
-                className="gap-2 text-white font-600 shrink-0"
-                style={{ background: "var(--brand)", border: "none", fontWeight: 600 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--brand-hover)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--brand)")}
+                className="btn-primary gap-2 font-600 shrink-0"
+                style={{ fontWeight: 600 }}
               >
                 <Plus size={16} strokeWidth={2.5} />
                 Nova usluga
@@ -251,12 +249,8 @@ export default function ServicesPage() {
       </motion.div>
 
       {/* Service list */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.28 }}
-        className="solid-card rounded-2xl overflow-hidden"
-      >
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden">
+
         <div
           className="flex items-center justify-between px-5 py-4"
           style={{ borderBottom: "1px solid var(--border)" }}
@@ -288,15 +282,15 @@ export default function ServicesPage() {
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
-              <div className="space-y-2">
+              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
                 {services.map((s, i) => (
                   <ServiceRow key={s.id} service={s} onToggle={() => toggleActive(s)} index={i} />
                 ))}
-              </div>
+              </motion.div>
             </AnimatePresence>
           )}
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }

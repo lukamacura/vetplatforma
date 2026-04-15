@@ -46,14 +46,14 @@
   --radius-4xl: 2rem;
   --radius:     0.75rem;
 
-  /* Sidebar (shadcn compat) */
-  --color-sidebar:                    var(--surface-glass);
-  --color-sidebar-foreground:         var(--text-primary);
+  /* Sidebar (shadcn compat) — dark sidebar spine */
+  --color-sidebar:                    var(--sidebar-bg);
+  --color-sidebar-foreground:         var(--sidebar-text);
   --color-sidebar-primary:            var(--brand);
   --color-sidebar-primary-foreground: #ffffff;
-  --color-sidebar-accent:             var(--brand-tint);
+  --color-sidebar-accent:             var(--sidebar-accent-glow);
   --color-sidebar-accent-foreground:  var(--brand);
-  --color-sidebar-border:             var(--border);
+  --color-sidebar-border:             var(--sidebar-border);
   --color-sidebar-ring:               var(--brand);
 }
 
@@ -67,20 +67,28 @@
      blue    → informational / time / neutral data
 ───────────────────────────────────────── */
 :root {
-  /* Background stack */
-  --bg:              #F6F9FC;
+  /* Background stack — warm neutral, no blue cast */
+  --bg:              #F8F9FA;
   --surface:         #FFFFFF;
-  --surface-raised:  #F0F4F8;
-  --surface-glass:   rgba(255, 255, 255, 0.88);
+  --surface-raised:  #F1F3F5;
+  --surface-glass:   rgba(255, 255, 255, 0.92);
 
-  /* Text */
-  --text-primary:   #1A2332;
+  /* Text — increased contrast range */
+  --text-primary:   #0F172A;
   --text-secondary: #475569;
-  --text-muted:     #8496A9;
+  --text-muted:     #94A3B8;
 
-  /* Border */
-  --border:         rgba(15, 30, 50, 0.09);
-  --border-strong:  rgba(15, 30, 50, 0.18);
+  /* Border — crisper */
+  --border:         rgba(15, 23, 42, 0.08);
+  --border-strong:  rgba(15, 23, 42, 0.16);
+
+  /* ── Dark sidebar spine ── */
+  --sidebar-bg:          #0C1222;
+  --sidebar-surface:     #151D2E;
+  --sidebar-text:        #CBD5E1;
+  --sidebar-text-active: #FFFFFF;
+  --sidebar-border:      rgba(255, 255, 255, 0.06);
+  --sidebar-accent-glow: rgba(43, 181, 160, 0.15);
 
   /* ── Brand teal ── */
   --brand:          #2BB5A0;
@@ -147,14 +155,28 @@
 
   body {
     background-color: var(--bg);
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 24px 24px;
     color: var(--text-primary);
     font-size: 14px;
     line-height: 1.6;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1, h2, h3 {
+    font-family: var(--font-display), "Space Grotesk", var(--font-jakarta), system-ui, sans-serif;
+    letter-spacing: -0.035em;
+    line-height: 1.2;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  h1 {
+    letter-spacing: -0.04em;
+  }
+
+  h4, h5, h6 {
     font-family: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
     line-height: 1.2;
     font-weight: 700;
     color: var(--text-primary);
@@ -352,6 +374,19 @@
   50%       { opacity: 0.4; transform: scale(0.75); }
 }
 
+/* ── Heartbeat blip for active timeline nodes ── */
+@keyframes heartbeat-blip {
+  0%, 85%, 100% { transform: scale(1); }
+  90%           { transform: scale(1, 1.8); }
+  95%           { transform: scale(1); }
+}
+
+.timeline-dot-active {
+  animation: heartbeat-blip 3s ease-in-out infinite;
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint), 0 0 12px rgba(43, 181, 160, 0.3);
+}
+
 .pulse-dot {
   width: 6px;
   height: 6px;
@@ -374,3 +409,283 @@
 .icon-yellow  { background: var(--yellow-tint);   color: var(--yellow);     }
 .icon-orange  { background: var(--orange-tint);   color: var(--orange);     }
 .icon-muted   { background: var(--surface-raised); color: var(--text-muted); }
+
+/* ─────────────────────────────────────────
+   INTERACTIVE ELEMENT HOVER STATES (CSS-only)
+───────────────────────────────────────── */
+
+/* Appointment row — replaces inline onMouseEnter/Leave */
+.appt-row {
+  background: transparent;
+  border: 1px solid var(--border);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.appt-row:hover {
+  background: var(--surface-raised);
+}
+
+.appt-row-active {
+  background: var(--brand-tint);
+  border-color: rgba(43, 181, 160, 0.28);
+}
+
+.appt-row-active:hover {
+  background: var(--brand-tint);
+}
+
+/* No-show button */
+.no-show-btn {
+  font-weight: 600;
+  background: var(--red-tint);
+  color: var(--red-text);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.no-show-btn:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+/* Reminder row hover */
+.reminder-row {
+  background: var(--surface);
+  transition: background 0.15s ease;
+}
+
+.reminder-row:hover {
+  background: var(--surface-raised);
+}
+
+/* Pet row card hover — handled via solid-card:hover in most cases */
+
+/* Filter button on patient list — uses data attribute for active state */
+.filter-chip {
+  transition: all 0.2s ease;
+}
+
+/* Back button hover (pet profile) */
+.back-link {
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.back-link:hover {
+  color: var(--text-primary);
+}
+
+/* Edit button hover (pet profile) */
+.edit-toggle {
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.edit-toggle:hover {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+/* Textarea focus (pet notes) */
+.vet-notes-textarea {
+  outline: none;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vet-notes-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-subtle);
+}
+
+/* Service toggle button */
+.service-toggle-active {
+  background: var(--brand-tint);
+  color: var(--brand);
+  border: 1px solid rgba(43, 181, 160, 0.25);
+  transition: all 0.2s ease;
+}
+
+.service-toggle-active:hover {
+  background: var(--red-tint);
+  color: var(--red);
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.service-toggle-inactive {
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+
+.service-toggle-inactive:hover {
+  background: var(--brand-tint);
+  color: var(--brand);
+  border-color: rgba(43, 181, 160, 0.25);
+}
+
+/* ─────────────────────────────────────────
+   DARK SIDEBAR NAV
+───────────────────────────────────────── */
+.sidebar-nav-item {
+  color: var(--sidebar-text);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav-item[data-active="true"] {
+  background: var(--sidebar-accent-glow);
+  color: var(--brand);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.sidebar-nav-item[data-active="false"]:hover {
+  background: var(--sidebar-surface);
+  color: var(--sidebar-text-active);
+}
+
+.sidebar-nav-signout {
+  color: var(--sidebar-text);
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.sidebar-nav-signout:hover {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--red);
+  opacity: 1;
+}
+
+/* ── Calendar day cell hover ── */
+.cal-day {
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.cal-day-inner {
+  background: transparent;
+}
+
+.cal-day[data-selected="true"] .cal-day-inner {
+  background: var(--brand);
+}
+
+.cal-day[data-today="true"]:not([data-selected="true"]) .cal-day-inner {
+  background: var(--brand-tint);
+}
+
+.cal-day:not([data-selected="true"]):hover .cal-day-inner {
+  background: var(--surface-raised);
+}
+
+.cal-day[data-today="true"]:not([data-selected="true"]):hover .cal-day-inner {
+  background: var(--brand-tint);
+}
+
+/* ─────────────────────────────────────────
+   MEDICAL FOLDER TABS
+───────────────────────────────────────── */
+.folder-tab {
+  position: relative;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.folder-tab:hover {
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+}
+
+.folder-tab[data-active="true"] {
+  background: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+  box-shadow: 0 2px 0 var(--surface);
+  z-index: 1;
+}
+
+.folder-tab[data-active="true"]:hover {
+  background: var(--surface);
+}
+
+/* ─────────────────────────────────────────
+   ATMOSPHERIC — gradient wash on main content
+───────────────────────────────────────── */
+.content-gradient {
+  position: relative;
+}
+
+.content-gradient::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 232px;
+  right: 0;
+  height: 320px;
+  background: linear-gradient(
+    180deg,
+    rgba(43, 181, 160, 0.03) 0%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+@media (max-width: 767px) {
+  .content-gradient::before {
+    left: 0;
+  }
+}
+
+/* ─────────────────────────────────────────
+   MOBILE NAVIGATION — Bottom tab bar + header
+───────────────────────────────────────── */
+
+.mobile-nav-tab {
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.mobile-nav-tab:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.mobile-nav-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 2.5px;
+  border-radius: 0 0 2px 2px;
+  background: var(--brand);
+}
+
+.mobile-signout-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.mobile-signout-btn:hover {
+  color: var(--red);
+  background: var(--red-tint);
+}
+
+.mobile-signout-btn:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}

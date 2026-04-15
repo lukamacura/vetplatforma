@@ -2,12 +2,15 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Users, Scissors, LogOut, Stethoscope, Bell, Settings } from "lucide-react"
+import {
+  LayoutDashboard, Users, Scissors, LogOut,
+  Stethoscope, Bell, Settings,
+} from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
 
 const navItems = [
-  { href: "/dashboard",             label: "Pregled dana", icon: LayoutDashboard },
+  { href: "/dashboard",             label: "Pregled",      icon: LayoutDashboard },
   { href: "/dashboard/pacijenti",   label: "Pacijenti",    icon: Users           },
   { href: "/dashboard/podsetnici",  label: "Podsetnici",   icon: Bell            },
   { href: "/dashboard/usluge",      label: "Usluge",       icon: Scissors        },
@@ -25,76 +28,61 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.refresh()
   }
 
-  // Bottom nav shows first 4 tabs only (Podešavanja stays sidebar-only on mobile for space)
-  const bottomNavItems = navItems.slice(0, 4)
+  function isActive(href: string) {
+    return pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
+  }
 
   return (
     <div className="flex min-h-screen" style={{ background: "var(--bg)" }}>
 
-      {/* ── Sidebar (desktop only) ── */}
+      {/* ── Sidebar (desktop only) — dark clinical spine ── */}
       <aside
-        className="w-[232px] flex-col hidden md:flex shrink-0"
+        className="w-[232px] flex-col hidden md:flex shrink-0 fixed top-0 left-0 h-screen z-30"
         style={{
-          background:           "var(--surface-glass)",
-          backdropFilter:       "blur(16px)",
-          WebkitBackdropFilter: "blur(16px)",
-          borderRight:          "1px solid var(--border)",
-          boxShadow:            "1px 0 0 var(--border)",
+          background:  "var(--sidebar-bg)",
+          borderRight: "1px solid var(--sidebar-border)",
         }}
       >
-        {/* Logo */}
         <div
           className="px-5 py-5 flex items-center gap-3"
-          style={{ borderBottom: "1px solid var(--border)" }}
+          style={{ borderBottom: "1px solid var(--sidebar-border)" }}
         >
-          <div className="icon-md icon-brand" style={{ borderRadius: 10 }}>
+          <div
+            className="icon-md shrink-0"
+            style={{
+              borderRadius: 10,
+              background: "var(--sidebar-accent-glow)",
+              color: "var(--brand)",
+            }}
+          >
             <Stethoscope size={18} strokeWidth={1.75} />
           </div>
           <div>
-            <p className="text-sm tracking-tight leading-none" style={{ color: "var(--text-primary)", fontWeight: 700 }}>
+            <p className="text-sm tracking-tight leading-none" style={{ color: "var(--sidebar-text-active)", fontWeight: 700 }}>
               VetPlatforma
             </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs mt-0.5" style={{ color: "var(--sidebar-text)", opacity: 0.6 }}>
               Upravljanje klinikom
             </p>
           </div>
         </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <nav aria-label="Glavna navigacija" className="flex-1 px-3 py-4 space-y-0.5">
           {navItems.map(({ href, label, icon: Icon }) => {
-            const active =
-              pathname === href ||
-              (href !== "/dashboard" && pathname.startsWith(href))
+            const active = isActive(href)
             return (
-              <Link key={href} href={href}>
+              <Link
+                key={href}
+                href={href}
+                aria-current={active ? "page" : undefined}
+              >
                 <motion.div
                   whileHover={{ x: 3 }}
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-pointer select-none"
-                  style={
-                    active
-                      ? {
-                          background: "var(--brand-tint)",
-                          color:      "var(--brand)",
-                          boxShadow:  "inset 3px 0 0 var(--brand)",
-                        }
-                      : { color: "var(--text-secondary)" }
-                  }
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.background = "var(--surface-raised)"
-                      e.currentTarget.style.color      = "var(--text-primary)"
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.background = "transparent"
-                      e.currentTarget.style.color      = "var(--text-secondary)"
-                    }
-                  }}
+                  className="sidebar-nav-item flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium cursor-pointer select-none"
+                  data-active={active}
                 >
-                  <Icon size={17} strokeWidth={active ? 2.25 : 1.75} style={{ flexShrink: 0 }} />
+                  <Icon size={17} strokeWidth={active ? 2.25 : 1.75} style={{ flexShrink: 0 }} aria-hidden="true" />
                   {label}
                 </motion.div>
               </Link>
@@ -102,37 +90,70 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* Sign out */}
-        <div className="px-3 py-4" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="px-3 py-4" style={{ borderTop: "1px solid var(--sidebar-border)" }}>
           <motion.button
             whileHover={{ x: 3 }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
             onClick={handleSignOut}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium w-full text-left"
-            style={{ color: "var(--text-muted)" }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--red-tint)"
-              e.currentTarget.style.color      = "var(--red)"
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent"
-              e.currentTarget.style.color      = "var(--text-muted)"
-            }}
+            className="sidebar-nav-signout flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium w-full text-left"
           >
-            <LogOut size={17} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            <LogOut size={17} strokeWidth={1.75} style={{ flexShrink: 0 }} aria-hidden="true" />
             Odjavi se
           </motion.button>
         </div>
       </aside>
 
+      {/* ── Mobile header — brand + logout ── */}
+      <header className="mobile-header fixed top-0 left-0 right-0 md:hidden z-[9999] flex items-center justify-between px-4"
+        style={{
+          height: 56,
+          background: "var(--surface)",
+          borderBottom: "1px solid var(--border)",
+          paddingTop: "env(safe-area-inset-top, 0px)",
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="icon-sm shrink-0"
+            style={{
+              borderRadius: 8,
+              background: "var(--brand-tint)",
+              color: "var(--brand)",
+            }}
+          >
+            <Stethoscope size={15} strokeWidth={2} aria-hidden="true" />
+          </div>
+          <span className="text-sm tracking-tight" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+            VetPlatforma
+          </span>
+        </div>
+
+        <button
+          onClick={handleSignOut}
+          aria-label="Odjavi se"
+          className="mobile-signout-btn flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all"
+          style={{
+            color: "var(--text-muted)",
+            background: "transparent",
+            minHeight: 44,
+          }}
+        >
+          <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
+          <span className="text-xs" style={{ fontWeight: 600 }}>Odjava</span>
+        </button>
+      </header>
+
       {/* ── Main ── */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 md:p-8 max-w-7xl mx-auto pb-24 md:pb-8">{children}</div>
+      <main className="flex-1 overflow-auto content-gradient md:ml-[232px]">
+        <div className="relative z-1 p-5 pt-[72px] md:pt-8 md:p-8 max-w-7xl mx-auto pb-28 md:pb-8">
+          {children}
+        </div>
       </main>
 
-      {/* ── Bottom nav (mobile only) ── */}
+      {/* ── Bottom nav (mobile only) — all 5 destinations ── */}
       <nav
-        className="fixed bottom-0 left-0 right-0 md:hidden flex"
+        aria-label="Glavna navigacija"
+        className="mobile-bottom-nav fixed bottom-0 left-0 right-0 md:hidden flex z-[9999]"
         style={{
           background:  "var(--surface)",
           borderTop:   "1px solid var(--border)",
@@ -140,27 +161,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        {bottomNavItems.map(({ href, label, icon: Icon }) => {
-          const active =
-            pathname === href ||
-            (href !== "/dashboard" && pathname.startsWith(href))
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href)
           return (
             <Link
               key={href}
               href={href}
-              className="flex-1 flex flex-col items-center gap-0.5 py-3 transition-colors"
-              style={{ color: active ? "var(--brand)" : "var(--text-muted)" }}
+              aria-current={active ? "page" : undefined}
+              className="mobile-nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+              style={{
+                color: active ? "var(--brand)" : "var(--text-muted)",
+                minHeight: 56,
+              }}
             >
               <span
-                className="flex items-center justify-center rounded-full transition-colors"
+                className="flex items-center justify-center rounded-full transition-all"
+                aria-hidden="true"
                 style={{
                   background: active ? "var(--brand-tint)" : "transparent",
-                  padding:    active ? "4px 12px" : "4px",
+                  width:  active ? 48 : 28,
+                  height: 28,
                 }}
               >
                 <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
               </span>
-              <span className="text-xs font-medium" style={{ fontSize: 10 }}>{label}</span>
+              <span
+                className="font-semibold leading-none"
+                style={{ fontSize: 11 }}
+              >
+                {label}
+              </span>
             </Link>
           )
         })}

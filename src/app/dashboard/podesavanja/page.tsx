@@ -6,6 +6,7 @@ import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { stagger } from "@/lib/motion"
 import { createCheckoutSession, createBillingPortalSession } from "@/app/dashboard/upgrade/actions"
 import type { ClinicHours } from "@/lib/types"
 
@@ -192,89 +193,97 @@ export default function PodesavanjaPage() {
     )
   }
 
+  const isActive = subscriptionStatus === "active"
+  const hasCard  = hasCardOnFile
+  const isExpired = subscriptionStatus === "expired" || subscriptionStatus === "cancelled"
+
   return (
-    <div className="space-y-8 max-w-2xl">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.26 }}>
-        <div className="flex items-center gap-3 mb-1">
-          <div className="icon-md icon-muted">
-            <Settings size={18} strokeWidth={1.75} />
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="space-y-6"
+    >
+      {/* ── Header ── */}
+      <motion.div variants={stagger.item} className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="icon-lg icon-muted">
+            <Settings size={22} strokeWidth={1.75} />
           </div>
           <div>
             <h1 className="text-2xl">Podešavanja</h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Podaci klinike i radni sati
+              Upravljajte podacima klinike, pretplatom i radnim satima
             </p>
           </div>
         </div>
       </motion.div>
 
-      {/* Section 1 — Subscription / Plan */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.24 }}
-        className="rounded-2xl p-5"
+      {/* ── Subscription banner — full width ── */}
+      <motion.div variants={stagger.item}
+        className="rounded-2xl p-6"
         style={{
-          background: subscriptionStatus === "active" || hasCardOnFile
-            ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.04) 100%)"
-            : subscriptionStatus === "expired" || subscriptionStatus === "cancelled"
-              ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.04) 100%)"
-              : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.04) 100%)",
-          border: `1px solid ${subscriptionStatus === "active" || hasCardOnFile ? "rgba(22,163,74,0.2)" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "rgba(220,38,38,0.2)" : "rgba(43,181,160,0.25)"}`,
+          background: isActive || hasCard
+            ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.02) 100%)"
+            : isExpired
+              ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.02) 100%)"
+              : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.02) 100%)",
+          border: `1px solid ${isActive || hasCard ? "rgba(22,163,74,0.18)" : isExpired ? "rgba(220,38,38,0.18)" : "rgba(43,181,160,0.22)"}`,
         }}
       >
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-start gap-3">
-            <div className={`icon-md shrink-0 ${subscriptionStatus === "active" || hasCardOnFile ? "icon-green" : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? "icon-red" : "icon-brand"}`}>
-              <CreditCard size={18} strokeWidth={1.75} />
+        <div className="flex items-center justify-between gap-6 flex-wrap">
+          <div className="flex items-start gap-4">
+            <div className={`icon-lg shrink-0 ${isActive || hasCard ? "icon-green" : isExpired ? "icon-red" : "icon-brand"}`}>
+              <CreditCard size={22} strokeWidth={1.75} />
             </div>
             <div>
-              <p className="text-xs uppercase tracking-wider mb-0.5" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
+              <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
                 VetPlatforma Pro · €49/mesec
               </p>
               {subscriptionStatus === "active" ? (
                 <>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 size={14} strokeWidth={2.5} style={{ color: "var(--green)" }} />
-                    <span className="text-base" style={{ fontWeight: 700, color: "var(--green)" }}>Pretplata aktivna</span>
+                    <CheckCircle2 size={15} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                    <span className="text-lg" style={{ fontWeight: 700, color: "var(--green)" }}>Pretplata aktivna</span>
                   </div>
                   {planExpiry && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Sledeće plaćanje: {planExpiry}</p>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Sledeće plaćanje: {planExpiry}</p>
                   )}
                 </>
-              ) : subscriptionStatus === "expired" || subscriptionStatus === "cancelled" ? (
+              ) : isExpired ? (
                 <>
-                  <span className="text-base" style={{ fontWeight: 700, color: "var(--red)" }}>Pretplata istekla</span>
+                  <span className="text-lg" style={{ fontWeight: 700, color: "var(--red)" }}>Pretplata istekla</span>
                   {planExpiry && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Isteklo: {planExpiry}</p>
                   )}
                 </>
-              ) : hasCardOnFile ? (
+              ) : hasCard ? (
                 <>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 size={14} strokeWidth={2.5} style={{ color: "var(--green)" }} />
-                    <span className="text-base" style={{ fontWeight: 700, color: "var(--green)" }}>Probni period · Kartica potvrđena</span>
+                    <CheckCircle2 size={15} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                    <span className="text-lg" style={{ fontWeight: 700, color: "var(--green)" }}>Probni period · Kartica potvrđena</span>
                   </div>
                   {planExpiry && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Prvo plaćanje: {planExpiry}</p>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Prvo plaćanje: {planExpiry}</p>
                   )}
                 </>
               ) : (
                 <>
-                  <span className="text-base" style={{ fontWeight: 700, color: "var(--brand)" }}>Probni period</span>
+                  <span className="text-lg" style={{ fontWeight: 700, color: "var(--brand)" }}>Probni period</span>
                   {planExpiry && (
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>Ističe: {planExpiry}</p>
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Ističe: {planExpiry}</p>
                   )}
                 </>
               )}
             </div>
           </div>
 
-          {hasCardOnFile || subscriptionStatus === "active" ? (
+          {hasCard || subscriptionStatus === "active" ? (
             <form action={() => startTransition(() => createBillingPortalSession())}>
               <button
                 type="submit"
                 disabled={isPending}
-                className="rounded-xl px-5 py-2.5 text-sm shrink-0 transition-opacity"
+                className="rounded-xl px-6 py-3 text-sm shrink-0 transition-all"
                 style={{
                   background: "var(--surface-raised)",
                   color:      "var(--text-primary)",
@@ -291,8 +300,8 @@ export default function PodesavanjaPage() {
               <button
                 type="submit"
                 disabled={isPending}
-                className="rounded-xl px-5 py-2.5 text-sm text-white shrink-0 transition-opacity"
-                style={{ background: "var(--brand)", fontWeight: 700, opacity: isPending ? 0.7 : 1 }}
+                className="btn-primary shrink-0"
+                style={{ opacity: isPending ? 0.7 : 1 }}
               >
                 {isPending ? "Preusmeravanje..." : "Aktiviraj pretplatu"}
               </button>
@@ -301,181 +310,221 @@ export default function PodesavanjaPage() {
         </div>
       </motion.div>
 
-      {/* Section 2 — Clinic name */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10, duration: 0.24 }} className="solid-card rounded-2xl p-6">
-        <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Naziv klinike</h2>
-        <form onSubmit={handleSaveClinic} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="clinic-name">Naziv</Label>
-            <Input
-              id="clinic-name"
-              value={clinicName}
-              onChange={(e) => setClinicName(e.target.value)}
-              placeholder="npr. Veterinarska ordinacija Đorđić"
-              required
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={savingClinic || !clinicName.trim()}
-              className="rounded-xl px-5 py-2 text-sm text-white"
-              style={{ background: "var(--brand)", fontWeight: 600, opacity: savingClinic ? 0.7 : 1 }}
-            >
-              {savingClinic ? "Čuvanje..." : "Sačuvaj naziv"}
-            </button>
-            {clinicMsg && (
-              <span className="text-sm" style={{ color: clinicMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
-                {clinicMsg}
-              </span>
+      {/* ── Two-column grid: Clinic Name + Phone ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Clinic name */}
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+          <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Naziv klinike</h2>
+          <form onSubmit={handleSaveClinic} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="clinic-name">Naziv</Label>
+              <Input
+                id="clinic-name"
+                value={clinicName}
+                onChange={(e) => setClinicName(e.target.value)}
+                placeholder="npr. Veterinarska ordinacija Đorđić"
+                required
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingClinic || !clinicName.trim()}
+                className="btn-primary"
+                style={{ opacity: savingClinic || !clinicName.trim() ? 0.6 : 1 }}
+              >
+                {savingClinic ? "Čuvanje..." : "Sačuvaj naziv"}
+              </button>
+              {clinicMsg && (
+                <span className="text-sm" style={{ color: clinicMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
+                  {clinicMsg}
+                </span>
+              )}
+            </div>
+          </form>
+        </motion.div>
+
+        {/* Phone */}
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+          <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Telefon</h2>
+          <form onSubmit={handleSavePhone} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Broj telefona</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="npr. +381 60 123 4567"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingPhone}
+                className="btn-primary"
+                style={{ opacity: savingPhone ? 0.6 : 1 }}
+              >
+                {savingPhone ? "Čuvanje..." : "Sačuvaj telefon"}
+              </button>
+              {phoneMsg && (
+                <span className="text-sm" style={{ color: phoneMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
+                  {phoneMsg}
+                </span>
+              )}
+            </div>
+          </form>
+        </motion.div>
+      </div>
+
+      {/* ── Invite link — full width ── */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+        <div className="flex items-start justify-between gap-6 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm mb-1" style={{ fontWeight: 700 }}>Link za poziv vlasnika</h2>
+            <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+              Pošaljite ovaj link vlasniku ljubimca da se poveže sa vašom klinikom.
+            </p>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex-1 rounded-xl px-4 py-3 text-sm truncate"
+                style={{
+                  background: "var(--surface-raised)",
+                  border:     "1px solid var(--border)",
+                  color:      "var(--text-secondary)",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                {inviteUrl || "—"}
+              </div>
+              <button
+                onClick={handleCopy}
+                disabled={!inviteUrl}
+                className="icon-md shrink-0 transition-all"
+                style={{
+                  background: copied ? "var(--green-tint)" : "var(--brand-tint)",
+                  color:      copied ? "var(--green)" : "var(--brand)",
+                  border:     `1px solid ${copied ? "rgba(22,163,74,0.2)" : "rgba(43,181,160,0.25)"}`,
+                }}
+              >
+                {copied ? <Check size={16} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2} />}
+              </button>
+            </div>
+            {copied && (
+              <p className="text-xs mt-2" style={{ color: "var(--green)" }}>Link kopiran!</p>
             )}
           </div>
-        </form>
-      </motion.div>
-
-      {/* Section 3 — Invite link */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.24 }} className="solid-card rounded-2xl p-6">
-        <h2 className="text-sm mb-1" style={{ fontWeight: 700 }}>Link za poziv vlasnika</h2>
-        <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
-          Pošaljite ovaj link vlasniku ljubimca da se poveže sa vašom klinikom.
-        </p>
-        <div className="flex items-center gap-2">
-          <div
-            className="flex-1 rounded-xl px-3 py-2.5 text-sm truncate"
-            style={{
-              background: "var(--surface-raised)",
-              border:     "1px solid var(--border)",
-              color:      "var(--text-secondary)",
-              fontFamily: "monospace",
-            }}
-          >
-            {inviteUrl || "—"}
-          </div>
-          <button
-            onClick={handleCopy}
-            disabled={!inviteUrl}
-            className="icon-md shrink-0 transition-all"
-            style={{
-              background: copied ? "var(--green-tint)" : "var(--brand-tint)",
-              color:      copied ? "var(--green)" : "var(--brand)",
-              border:     `1px solid ${copied ? "rgba(22,163,74,0.2)" : "rgba(43,181,160,0.25)"}`,
-            }}
-          >
-            {copied ? <Check size={16} strokeWidth={2.5} /> : <Copy size={15} strokeWidth={2} />}
-          </button>
         </div>
-        {copied && (
-          <p className="text-xs mt-2" style={{ color: "var(--green)" }}>Link kopiran!</p>
-        )}
       </motion.div>
 
-      {/* Section 3 — Phone */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14, duration: 0.24 }} className="solid-card rounded-2xl p-6">
-        <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Telefon</h2>
-        <form onSubmit={handleSavePhone} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="phone">Broj telefona</Label>
-            <Input
-              id="phone"
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="npr. +381 60 123 4567"
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={savingPhone}
-              className="rounded-xl px-5 py-2 text-sm text-white"
-              style={{ background: "var(--brand)", fontWeight: 600, opacity: savingPhone ? 0.7 : 1 }}
-            >
-              {savingPhone ? "Čuvanje..." : "Sačuvaj telefon"}
-            </button>
-            {phoneMsg && (
-              <span className="text-sm" style={{ color: phoneMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
-                {phoneMsg}
-              </span>
-            )}
-          </div>
-        </form>
-      </motion.div>
-
-      {/* Section 5 — Working hours */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22, duration: 0.24 }} className="solid-card rounded-2xl p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="icon-sm icon-blue">
-            <Clock size={14} strokeWidth={2} />
+      {/* ── Working hours — full width, grid layout ── */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="icon-md icon-blue">
+            <Clock size={16} strokeWidth={2} />
           </div>
           <div>
             <h2 className="text-sm" style={{ fontWeight: 700 }}>Radni sati</h2>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>Prikazuju se vlasnicima pri zakazivanju</p>
           </div>
         </div>
-        <form onSubmit={handleSaveHours} className="space-y-3">
-          {WEEKDAYS.map(({ index, label }) => {
-            const row = hours.find((h) => h.weekday === index)!
-            return (
-              <div key={index} className="flex items-center gap-3 py-2.5" style={{ borderBottom: "1px solid var(--border)" }}>
-                {/* Weekday label */}
-                <span className="w-[108px] text-sm shrink-0" style={{ fontWeight: 500 }}>{label}</span>
 
-                {/* Open/Closed toggle */}
-                <button
-                  type="button"
-                  onClick={() => updateHoursRow(index, { is_closed: !row.is_closed })}
-                  className="rounded-lg px-3 py-1.5 text-xs shrink-0 transition-all"
+        <form onSubmit={handleSaveHours}>
+          <div
+            className="rounded-xl overflow-hidden mb-5"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            {/* Table header */}
+            <div
+              className="grid items-center px-5 py-3 text-xs uppercase tracking-wider"
+              style={{
+                gridTemplateColumns: "1fr 120px 1fr",
+                background: "var(--surface-raised)",
+                color: "var(--text-muted)",
+                fontWeight: 700,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <span>Dan</span>
+              <span className="text-center">Status</span>
+              <span>Radno vreme</span>
+            </div>
+
+            {WEEKDAYS.map(({ index, label }, i) => {
+              const row = hours.find((h) => h.weekday === index)!
+              const isLast = i === WEEKDAYS.length - 1
+              return (
+                <div
+                  key={index}
+                  className="grid items-center px-5 py-3 transition-colors"
                   style={{
-                    background:  row.is_closed ? "var(--surface-raised)" : "var(--brand-tint)",
-                    color:       row.is_closed ? "var(--text-muted)" : "var(--brand)",
-                    border:      `1px solid ${row.is_closed ? "var(--border)" : "rgba(43,181,160,0.25)"}`,
-                    fontWeight:  600,
-                    minWidth:    72,
+                    gridTemplateColumns: "1fr 120px 1fr",
+                    borderBottom: isLast ? "none" : "1px solid var(--border)",
+                    background: row.is_closed ? "var(--surface-raised)" : "var(--surface)",
+                    opacity: row.is_closed ? 0.7 : 1,
                   }}
                 >
-                  {row.is_closed ? "Zatvoreno" : "Otvoreno"}
-                </button>
+                  <span className="text-sm" style={{ fontWeight: 600 }}>{label}</span>
 
-                {/* Time inputs */}
-                {!row.is_closed && (
-                  <div className="flex items-center gap-2 flex-1">
-                    <input
-                      type="time"
-                      value={row.open_time}
-                      onChange={(e) => updateHoursRow(index, { open_time: e.target.value })}
-                      className="rounded-lg px-2 py-1.5 text-sm"
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => updateHoursRow(index, { is_closed: !row.is_closed })}
+                      className="rounded-lg px-3 py-1.5 text-xs transition-all"
                       style={{
-                        background:  "var(--surface-raised)",
-                        border:      "1px solid var(--border)",
-                        color:       "var(--text-primary)",
-                        minWidth:    88,
+                        background:  row.is_closed ? "var(--surface)" : "var(--brand-tint)",
+                        color:       row.is_closed ? "var(--text-muted)" : "var(--brand)",
+                        border:      `1px solid ${row.is_closed ? "var(--border)" : "rgba(43,181,160,0.25)"}`,
+                        fontWeight:  600,
+                        minWidth:    96,
                       }}
-                    />
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>–</span>
-                    <input
-                      type="time"
-                      value={row.close_time}
-                      onChange={(e) => updateHoursRow(index, { close_time: e.target.value })}
-                      className="rounded-lg px-2 py-1.5 text-sm"
-                      style={{
-                        background:  "var(--surface-raised)",
-                        border:      "1px solid var(--border)",
-                        color:       "var(--text-primary)",
-                        minWidth:    88,
-                      }}
-                    />
+                    >
+                      {row.is_closed ? "Zatvoreno" : "Otvoreno"}
+                    </button>
                   </div>
-                )}
-              </div>
-            )
-          })}
 
-          <div className="flex items-center gap-3 pt-2">
+                  {!row.is_closed ? (
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="time"
+                        value={row.open_time}
+                        onChange={(e) => updateHoursRow(index, { open_time: e.target.value })}
+                        className="rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          background:  "var(--surface-raised)",
+                          border:      "1px solid var(--border)",
+                          color:       "var(--text-primary)",
+                          minWidth:    100,
+                        }}
+                      />
+                      <span className="text-sm" style={{ color: "var(--text-muted)", fontWeight: 500 }}>do</span>
+                      <input
+                        type="time"
+                        value={row.close_time}
+                        onChange={(e) => updateHoursRow(index, { close_time: e.target.value })}
+                        className="rounded-lg px-3 py-2 text-sm"
+                        style={{
+                          background:  "var(--surface-raised)",
+                          border:      "1px solid var(--border)",
+                          color:       "var(--text-primary)",
+                          minWidth:    100,
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-sm" style={{ color: "var(--text-muted)" }}>—</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex items-center gap-3">
             <button
               type="submit"
               disabled={savingHours}
-              className="rounded-xl px-5 py-2 text-sm text-white"
-              style={{ background: "var(--brand)", fontWeight: 600, opacity: savingHours ? 0.7 : 1 }}
+              className="btn-primary"
+              style={{ opacity: savingHours ? 0.6 : 1 }}
             >
               {savingHours ? "Čuvanje..." : "Sačuvaj radne sate"}
             </button>
@@ -487,6 +536,6 @@ export default function PodesavanjaPage() {
           </div>
         </form>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }

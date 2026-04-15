@@ -18,8 +18,18 @@ import {
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
+import { stagger } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 import type { Pet, Profile, AppointmentStatus, Species, Gender } from "@/lib/types"
+
+type FolderTab = "podaci" | "beleske" | "posete" | "vakcine"
+
+const FOLDER_TABS: { key: FolderTab; label: string; icon: React.ElementType }[] = [
+  { key: "podaci", label: "Podaci", icon: Info },
+  { key: "beleske", label: "Beleške", icon: Lock },
+  { key: "posete", label: "Posete", icon: History },
+  { key: "vakcine", label: "Vakcine", icon: Syringe },
+]
 
 type ApptHistoryRow = {
   id: string
@@ -137,45 +147,6 @@ function ageLabelSr(birthDate: string | null): string | null {
   return `${n} godina`
 }
 
-function SectionCard({
-  title,
-  icon: Icon,
-  iconClass = "icon-brand",
-  children,
-  delay = 0,
-  action,
-}: {
-  title: string
-  icon: React.ElementType
-  iconClass?: string
-  children: React.ReactNode
-  delay?: number
-  action?: React.ReactNode
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.26 }}
-      className="solid-card rounded-2xl overflow-hidden h-full"
-    >
-      <div
-        className="flex items-center gap-2.5 px-5 py-3"
-        style={{ borderBottom: "1px solid var(--border)" }}
-      >
-        <div className={`icon-sm shrink-0 ${iconClass}`}>
-          <Icon size={13} strokeWidth={2.25} />
-        </div>
-        <h3 className="text-sm leading-tight flex-1" style={{ fontWeight: 600 }}>
-          {title}
-        </h3>
-        {action}
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </motion.div>
-  )
-}
-
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <dt
@@ -237,6 +208,7 @@ export default function PetProfilePage() {
   const [nextVaccineDate, setNextVaccineDate] = useState("")
   const [nextControlDate, setNextControlDate] = useState("")
   const [vetNotes, setVetNotes] = useState("")
+  const [activeTab, setActiveTab] = useState<FolderTab>("podaci")
 
   useEffect(() => {
     async function load() {
@@ -467,21 +439,19 @@ export default function PetProfilePage() {
   ]
 
   return (
-    <div className="space-y-5 w-full">
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="space-y-5 w-full"
+    >
       {/* Hero */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="solid-card rounded-2xl p-5"
-      >
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5">
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-xs mb-4 transition-colors"
-          style={{ color: "var(--text-muted)", fontWeight: 600 }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)" }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)" }}
+          className="back-link flex items-center gap-1.5 text-xs mb-4"
+          style={{ fontWeight: 600 }}
         >
           <ArrowLeft size={14} strokeWidth={2} />
           Nazad na pacijente
@@ -517,183 +487,201 @@ export default function PetProfilePage() {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-5 items-start">
-        {/* Left — Podaci o ljubimcu */}
-        <div className="lg:col-span-3">
-          <SectionCard
-            title="Podaci o ljubimcu"
-            icon={Info}
-            iconClass="icon-brand"
-            delay={0.06}
-            action={
-              <button
-                type="button"
-                onClick={() => editingBasics ? cancelBasicsEdit() : setEditingBasics(true)}
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = "var(--brand)"
-                  e.currentTarget.style.background = "var(--brand-tint)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "var(--text-muted)"
-                  e.currentTarget.style.background = "transparent"
-                }}
-              >
-                {editingBasics ? <X size={14} strokeWidth={2} /> : <Pencil size={14} strokeWidth={2} />}
-              </button>
-            }
-          >
-            <dl className="space-y-0">
-              {basicsRows.map((row, i) => (
-                <div
-                  key={row.label}
-                  className={cn("py-2.5", i < basicsRows.length - 1 && "border-b")}
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <FieldLabel>{row.label}</FieldLabel>
-                  {editingBasics ? (
-                    <div className="mt-1">{row.editField}</div>
-                  ) : (
-                    <FieldValue mono={row.label === "ID mikročipa"}>{row.value}</FieldValue>
+      {/* Medical folder tabs */}
+      <motion.div variants={stagger.item}>
+        <div className="flex items-end gap-0 px-1 -mb-px relative z-1">
+          {FOLDER_TABS.map(({ key, label, icon: TabIcon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className="folder-tab flex items-center gap-1.5"
+              data-active={activeTab === key}
+            >
+              <TabIcon size={13} strokeWidth={2} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="solid-card rounded-2xl rounded-tl-none overflow-hidden">
+          <div className="px-5 py-5">
+
+            {/* Tab: Podaci */}
+            {activeTab === "podaci" && (
+              <motion.div key="podaci" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm" style={{ fontWeight: 600 }}>Podaci o ljubimcu</h3>
+                  <button
+                    type="button"
+                    onClick={() => editingBasics ? cancelBasicsEdit() : setEditingBasics(true)}
+                    className="edit-toggle p-1.5 rounded-lg"
+                  >
+                    {editingBasics ? <X size={14} strokeWidth={2} /> : <Pencil size={14} strokeWidth={2} />}
+                  </button>
+                </div>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
+                  {basicsRows.map((row, i) => (
+                    <div
+                      key={row.label}
+                      className={cn("py-2.5", i < basicsRows.length - 1 && "border-b")}
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <FieldLabel>{row.label}</FieldLabel>
+                      {editingBasics ? (
+                        <div className="mt-1">{row.editField}</div>
+                      ) : (
+                        <FieldValue mono={row.label === "ID mikročipa"}>{row.value}</FieldValue>
+                      )}
+                    </div>
+                  ))}
+                </dl>
+                {editingBasics && (
+                  <div className="flex flex-wrap items-center gap-3 mt-5 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                      <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
+                        {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
+                        {saving ? "Čuvanje..." : "Sačuvaj izmene"}
+                      </button>
+                    </motion.div>
+                    {saved && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -4 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-1.5 text-sm"
+                        style={{ color: "var(--green)", fontWeight: 600 }}
+                      >
+                        <CheckCircle size={15} strokeWidth={2.25} />
+                        Sačuvano
+                      </motion.div>
+                    )}
+                    {error && (
+                      <span className="text-sm" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</span>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Tab: Beleske */}
+            {activeTab === "beleske" && (
+              <motion.div key="beleske" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm" style={{ fontWeight: 600 }}>Beleške veterinara</h3>
+                  <span className="badge badge-muted" style={{ gap: 4 }}>
+                    <Lock size={10} strokeWidth={2} />
+                    Samo vet
+                  </span>
+                </div>
+                <textarea
+                  className="vet-notes-textarea w-full min-h-[140px] rounded-xl text-sm resize-y px-3 py-2"
+                  style={{
+                    background: "var(--blue-tint)",
+                    color: "var(--text-primary)",
+                    lineHeight: 1.6,
+                    fontFamily: "inherit",
+                  }}
+                  placeholder="Beleške sa pregleda…"
+                  value={vetNotes}
+                  onChange={(e) => setVetNotes(e.target.value)}
+                />
+                <div className="mt-3">
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                    <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
+                      {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
+                      {saving ? "Čuvanje..." : "Sačuvaj"}
+                    </button>
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Tab: Posete (visit history) */}
+            {activeTab === "posete" && (
+              <motion.div key="posete" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+                <div className="relative pl-1">
+                  <ul className="space-y-0">
+                    {apptHistory.map((appt, idx) => {
+                      const d = new Date(appt.scheduled_at)
+                      const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "short", year: "numeric" })
+                      const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
+                      const isLast = idx === apptHistory.length - 1
+                      const isFirst = idx === 0
+                      const statusBadge =
+                        appt.status === "confirmed"
+                          ? { cls: "badge-brand", label: "Potvrđen" }
+                          : appt.status === "cancelled"
+                            ? { cls: "badge-muted", label: "Otkazan" }
+                            : { cls: "badge-red", label: "Nije došao" }
+                      const dotMuted = appt.status !== "confirmed"
+                      return (
+                        <li key={appt.id} className={`relative pl-7 ${isLast ? "" : "pb-6"}`}>
+                          {!isLast && (
+                            <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
+                          )}
+                          <span
+                            className={cn(
+                              "absolute left-0 top-1.5 size-2.5 rounded-full z-1",
+                              isFirst && !dotMuted && "timeline-dot-active"
+                            )}
+                            style={isFirst && !dotMuted ? undefined : {
+                              background: dotMuted ? "var(--border-strong)" : "var(--brand)",
+                              boxShadow: dotMuted ? "none" : "0 0 0 3px var(--brand-tint)",
+                            }}
+                          />
+                          <div className="flex flex-wrap items-start justify-between gap-2 gap-y-1">
+                            <div className="min-w-0">
+                              <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>{appt.service_name}</p>
+                              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{dateStr} · {timeStr}</p>
+                            </div>
+                            <span className={`badge shrink-0 ${statusBadge.cls}`}>{statusBadge.label}</span>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {apptHistory.length === 0 && (
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nema termina.</p>
                   )}
                 </div>
-              ))}
-            </dl>
-          </SectionCard>
-        </div>
+              </motion.div>
+            )}
 
-        {/* Middle — vet timeline */}
-        <div className="lg:col-span-5 space-y-4">
-          <SectionCard title="Istorija poseta" icon={History} iconClass="icon-brand" delay={0.1}>
-            <div className="relative pl-1">
-              <ul className="space-y-0">
-                <li className="relative pb-6 pl-7">
-                  <span
-                    className="absolute left-0 top-1.5 size-2.5 rounded-full z-[1]"
-                    style={{ background: "var(--brand)", boxShadow: "0 0 0 3px var(--brand-tint)" }}
-                  />
-                  <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm" style={{ fontWeight: 600 }}>Beleške</span>
-                    <span className="badge badge-muted" style={{ gap: 4 }}>
-                      <Lock size={10} strokeWidth={2} />
-                      Samo vet
-                    </span>
+            {/* Tab: Vakcine */}
+            {activeTab === "vakcine" && (
+              <motion.div key="vakcine" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="space-y-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="icon-sm icon-amber shrink-0">
+                      <Syringe size={13} strokeWidth={2.25} />
+                    </div>
+                    <h3 className="text-sm" style={{ fontWeight: 600 }}>Vakcinacija</h3>
                   </div>
-                  <textarea
-                    className="w-full min-h-[90px] rounded-xl text-sm resize-y px-3 py-2 transition-all"
-                    style={{
-                      background: "var(--blue-tint)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text-primary)",
-                      lineHeight: 1.6,
-                      outline: "none",
-                      fontFamily: "inherit",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "var(--brand)"
-                      e.currentTarget.style.boxShadow = "0 0 0 3px var(--brand-subtle)"
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "var(--border)"
-                      e.currentTarget.style.boxShadow = "none"
-                    }}
-                    placeholder="Beleške sa pregleda…"
-                    value={vetNotes}
-                    onChange={(e) => setVetNotes(e.target.value)}
-                  />
-                </li>
-
-                {apptHistory.map((appt, idx) => {
-                  const d = new Date(appt.scheduled_at)
-                  const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "short", year: "numeric" })
-                  const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
-                  const isLast = idx === apptHistory.length - 1
-                  const statusBadge =
-                    appt.status === "confirmed"
-                      ? { cls: "badge-brand", label: "Potvrđen" }
-                      : appt.status === "cancelled"
-                        ? { cls: "badge-muted", label: "Otkazan" }
-                        : { cls: "badge-red", label: "Nije došao" }
-                  const dotMuted = appt.status !== "confirmed"
-                  return (
-                    <li key={appt.id} className={`relative pl-7 ${isLast ? "" : "pb-6"}`}>
-                      {!isLast && (
-                        <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
-                      )}
-                      <span
-                        className="absolute left-0 top-1.5 size-2.5 rounded-full z-[1]"
-                        style={{
-                          background: dotMuted ? "var(--border-strong)" : "var(--brand)",
-                          boxShadow: dotMuted ? "none" : "0 0 0 3px var(--brand-tint)",
-                        }}
-                      />
-                      <div className="flex flex-wrap items-start justify-between gap-2 gap-y-1">
-                        <div className="min-w-0">
-                          <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>{appt.service_name}</p>
-                          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{dateStr} · {timeStr}</p>
-                        </div>
-                        <span className={`badge shrink-0 ${statusBadge.cls}`}>{statusBadge.label}</span>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-
-              {apptHistory.length === 0 && (
-                <p className="text-sm pl-7" style={{ color: "var(--text-muted)" }}>Nema termina.</p>
-              )}
-            </div>
-          </SectionCard>
+                  <FieldLabel>Sledeća vakcinacija</FieldLabel>
+                  <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} className="mt-1.5 max-w-xs" />
+                </div>
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="icon-sm icon-brand shrink-0">
+                      <Stethoscope size={13} strokeWidth={2.25} />
+                    </div>
+                    <h3 className="text-sm" style={{ fontWeight: 600 }}>Kontrolni pregled</h3>
+                  </div>
+                  <FieldLabel>Sledeći pregled</FieldLabel>
+                  <Input id="control" type="date" value={nextControlDate} onChange={(e) => setNextControlDate(e.target.value)} className="mt-1.5 max-w-xs" />
+                </div>
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                    <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
+                      {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
+                      {saving ? "Čuvanje..." : "Sačuvaj datume"}
+                    </button>
+                  </motion.div>
+                </div>
+              </motion.div>
+            )}
+          </div>
         </div>
-
-        {/* Right — Vakcina & Pregled */}
-        <div className="lg:col-span-4 space-y-4">
-          <SectionCard title="Vakcina" icon={Syringe} iconClass="icon-amber" delay={0.12}>
-            <div>
-              <FieldLabel>Sledeća vakcinacija</FieldLabel>
-              <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} className="mt-1.5" />
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Pregled" icon={Stethoscope} iconClass="icon-brand" delay={0.14}>
-            <div>
-              <FieldLabel>Sledeći pregled</FieldLabel>
-              <Input id="control" type="date" value={nextControlDate} onChange={(e) => setNextControlDate(e.target.value)} className="mt-1.5" />
-            </div>
-          </SectionCard>
-        </div>
-      </div>
-
-      {/* Save */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="flex flex-wrap items-center gap-3 pb-2"
-      >
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-          <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-            {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
-            {saving ? "Čuvanje..." : "Sačuvaj izmene"}
-          </button>
-        </motion.div>
-        {saved && (
-          <motion.div
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-1.5 text-sm"
-            style={{ color: "var(--green)", fontWeight: 600 }}
-          >
-            <CheckCircle size={15} strokeWidth={2.25} />
-            Sačuvano
-          </motion.div>
-        )}
-        {error && (
-          <span className="text-sm" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</span>
-        )}
       </motion.div>
-    </div>
+    </motion.div>
   )
 }

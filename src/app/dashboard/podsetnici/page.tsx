@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Bell, Phone, CalendarPlus, CheckCircle2, Syringe, Stethoscope } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
+import { stagger } from "@/lib/motion"
 import type { Pet, Profile } from "@/lib/types"
 
 const SPECIES_EMOJI: Record<string, string> = {
@@ -64,17 +65,12 @@ function ReminderRow({ item, index }: { item: ReminderItem; index: number }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -6 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.22 }}
-      className="flex items-center gap-3 rounded-xl px-4 py-3"
+      variants={stagger.row}
+      className="reminder-row flex items-center gap-3 rounded-xl px-4 py-3"
       style={{
-        background: "var(--surface)",
         border: `1px solid var(--border)`,
         borderLeft: `3px solid ${accentColor}`,
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-raised)" }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "var(--surface)" }}
     >
       {/* Pet identity */}
       <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -239,9 +235,14 @@ export default function PodsetnicePage() {
   const filtered = items.filter((item) => classify(item) === currentTab)
 
   return (
-    <div className="space-y-7">
+    <motion.div
+      variants={stagger.container}
+      initial="hidden"
+      animate="visible"
+      className="space-y-7"
+    >
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28 }}>
+      <motion.div variants={stagger.item}>
         <div className="flex items-center gap-3 mb-1">
           <div className="icon-md icon-amber">
             <Bell size={18} strokeWidth={1.75} />
@@ -256,12 +257,8 @@ export default function PodsetnicePage() {
       </motion.div>
 
       {/* Tab bar */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.24 }}
-        className="flex gap-2 flex-wrap"
-      >
+      <motion.div variants={stagger.item} className="flex gap-2 flex-wrap">
+
         {TABS.map(({ key, label, badgeClass }) => {
           const isActive = currentTab === key
           const count = tabCounts[key]
@@ -293,9 +290,7 @@ export default function PodsetnicePage() {
       {/* List */}
       <motion.div
         key={currentTab}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.22 }}
+        variants={stagger.item}
         className="solid-card rounded-2xl overflow-hidden"
       >
         <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
@@ -335,14 +330,14 @@ export default function PodsetnicePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
               {filtered.map((item, i) => (
                 <ReminderRow key={item.pet.id} item={item} index={i} />
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </motion.div>
-    </div>
+    </motion.div>
   )
 }
