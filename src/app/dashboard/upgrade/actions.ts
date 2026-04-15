@@ -36,16 +36,26 @@ export async function createCheckoutSession(): Promise<void> {
 
   // Fetch clinic via service role (stripe_customer_id not accessible via RLS-scoped client)
   const { data: clinic } = await serviceClient
-    .from("clinics").select("name, stripe_customer_id").eq("id", clinicId).single()
+    .from("clinics")
+    .select("name, stripe_customer_id, subscription_status, trial_started_at")
+    .eq("id", clinicId)
+    .single()
   if (!clinic) redirect("/dashboard")
 
-  let customerId = (clinic as { stripe_customer_id: string | null }).stripe_customer_id
+  const clinicRow = clinic as {
+    name:                 string
+    stripe_customer_id:   string | null
+    subscription_status:  string | null
+    trial_started_at:     string | null
+  }
+
+  let customerId = clinicRow.stripe_customer_id
 
   // Create Stripe customer if not exists yet
   if (!customerId) {
     const customer = await stripe.customers.create({
       email:    user.email ?? undefined,
-      name:     clinic.name as string,
+      name:     clinicRow.name,
       metadata: { clinic_id: clinicId },
     })
     customerId = customer.id
@@ -57,10 +67,25 @@ export async function createCheckoutSession(): Promise<void> {
 
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
+  // If user is still in their 30-day in-app trial, carry remaining time over to Stripe
+  // so Checkout shows "Total due today €0.00 · First payment on <date>".
+  const nowSec = Math.floor(Date.now() / 1000)
+  let trialEndSec: number | null = null
+  if (clinicRow.subscription_status === "trial" && clinicRow.trial_started_at) {
+    const endSec = Math.floor(new Date(clinicRow.trial_started_at).getTime() / 1000) + 30 * 86400
+    if (endSec > nowSec) trialEndSec = endSec
+  }
+
   const session = await stripe.checkout.sessions.create({
     customer:    customerId,
     mode:        "subscription",
     line_items:  [{ price: process.env.STRIPE_PRICE_ID!, quantity: 1 }],
+    ...(trialEndSec && {
+      subscription_data: {
+        trial_end: trialEndSec,
+        trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+      },
+    }),
     success_url: `${origin}/dashboard?subscribed=1`,
     cancel_url:  `${origin}/dashboard/upgrade`,
   })

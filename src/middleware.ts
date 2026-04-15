@@ -87,6 +87,12 @@ export async function middleware(request: NextRequest) {
             const trialStart = new Date(clinic.trial_started_at)
             const daysSince  = (Date.now() - trialStart.getTime()) / (1000 * 60 * 60 * 24)
             if (daysSince > TRIAL_DAYS) {
+              // Persist the expired state so UI badges and queries stay truthful.
+              // RLS policy clinics_vet_all lets the owner update their own clinic.
+              await supabase
+                .from('clinics')
+                .update({ subscription_status: 'expired' })
+                .eq('id', clinicId)
               return NextResponse.redirect(new URL('/dashboard/upgrade', request.url))
             }
           }

@@ -7,10 +7,11 @@ import { createClient } from "@/lib/supabase/client"
 import { createCheckoutSession } from "./actions"
 
 export default function UpgradePage() {
-  const [clinicName,  setClinicName]  = useState("")
-  const [trialExpiry, setTrialExpiry] = useState<string | null>(null)
-  const [loading,     setLoading]     = useState(true)
-  const [isPending,   startTransition] = useTransition()
+  const [clinicName,   setClinicName]   = useState("")
+  const [trialExpiry,  setTrialExpiry]  = useState<string | null>(null)
+  const [trialActive,  setTrialActive]  = useState(false)
+  const [loading,      setLoading]      = useState(true)
+  const [isPending,    startTransition] = useTransition()
 
   useEffect(() => {
     async function load() {
@@ -20,26 +21,23 @@ export default function UpgradePage() {
 
       const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
       const clinicId = profile?.clinic_id
+
+      function applyClinic(c: { name: string; subscription_status: string | null; trial_started_at: string | null }) {
+        setClinicName(c.name)
+        if (c.trial_started_at) {
+          const exp = new Date(c.trial_started_at)
+          exp.setDate(exp.getDate() + 30)
+          setTrialExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
+          setTrialActive(c.subscription_status === "trial" && exp.getTime() > Date.now())
+        }
+      }
+
       if (!clinicId) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, trial_started_at").eq("owner_id", user.id).single()
-        if (owned) {
-          setClinicName(owned.name)
-          if (owned.trial_started_at) {
-            const exp = new Date(owned.trial_started_at)
-            exp.setDate(exp.getDate() + 30)
-            setTrialExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
-          }
-        }
+        const { data: owned } = await supabase.from("clinics").select("id, name, subscription_status, trial_started_at").eq("owner_id", user.id).single()
+        if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, trial_started_at").eq("id", clinicId).single()
-        if (clinic) {
-          setClinicName(clinic.name)
-          if (clinic.trial_started_at) {
-            const exp = new Date(clinic.trial_started_at)
-            exp.setDate(exp.getDate() + 30)
-            setTrialExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
-          }
-        }
+        const { data: clinic } = await supabase.from("clinics").select("name, subscription_status, trial_started_at").eq("id", clinicId).single()
+        if (clinic) applyClinic(clinic)
       }
       setLoading(false)
     }
@@ -77,13 +75,17 @@ export default function UpgradePage() {
 
         {/* Title */}
         <div className="space-y-2">
-          <h1 className="text-2xl">Probni period istekao</h1>
+          <h1 className="text-2xl">
+            {trialActive ? "Aktivirajte pretplatu" : "Probni period istekao"}
+          </h1>
           {clinicName && (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>{clinicName}</p>
           )}
           {trialExpiry && (
-            <p className="text-xs" style={{ color: "var(--red)" }}>
-              Probni period istekao: {trialExpiry}
+            <p className="text-xs" style={{ color: trialActive ? "var(--brand)" : "var(--red)" }}>
+              {trialActive
+                ? `Besplatno do ${trialExpiry} — prvo plaćanje tek tada`
+                : `Probni period istekao: ${trialExpiry}`}
             </p>
           )}
         </div>

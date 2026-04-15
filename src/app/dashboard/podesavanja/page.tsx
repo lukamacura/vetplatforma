@@ -78,11 +78,17 @@ export default function PodesavanjaPage() {
       function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null }) {
         setClinicName(c.name)
         setClinicSlug(c.slug)
-        const status = c.subscription_status ?? "trial"
+        let status = c.subscription_status ?? "trial"
+        // Treat trial past 30 days as expired even before middleware persists it.
+        if (status === "trial" && c.trial_started_at) {
+          const exp = new Date(c.trial_started_at)
+          exp.setDate(exp.getDate() + 30)
+          if (exp.getTime() < Date.now()) status = "expired"
+        }
         setSubscriptionStatus(status)
         if (status === "active" && c.subscription_current_period_end) {
           setPlanExpiry(new Date(c.subscription_current_period_end).toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
-        } else if (status === "trial" && c.trial_started_at) {
+        } else if (c.trial_started_at) {
           const exp = new Date(c.trial_started_at)
           exp.setDate(exp.getDate() + 30)
           setPlanExpiry(exp.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "long", year: "numeric" }))
