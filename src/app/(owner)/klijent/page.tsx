@@ -59,7 +59,7 @@ export default function OwnerHomePage() {
 
       const now = new Date().toISOString()
 
-      const apptCols = "id, clinic_id, pet_id, service_id, owner_id, scheduled_at, status, booked_by, created_at"
+      const apptCols = "id, clinic_id, pet_id, service_id, owner_id, scheduled_at, status, booked_by, vet_notes, created_at"
       const [{ data: upcomingData }, { data: pastData }] = await Promise.all([
         supabase.from("appointments").select(apptCols)
           .eq("owner_id", user.id)
