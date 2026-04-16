@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, PawPrint, Pencil } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Plus, PawPrint } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PetCard } from "@/components/ui/pet-card"
 import { createClient } from "@/lib/supabase/client"
 import type { Pet } from "@/lib/types"
 
 export default function MyPetsPage() {
+  const router = useRouter()
   const [pets, setPets] = useState<Pet[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -19,7 +21,7 @@ export default function MyPetsPage() {
       if (!user) { setLoading(false); return }
       const { data } = await supabase
         .from("pets")
-        .select("*")
+        .select("id, owner_id, name, species, breed, birth_date, weight_kg, next_vaccine_date, next_control_date, chip_id, passport_number, gender, color, owner_notes, vaccine_note, created_at")
         .eq("owner_id", user.id)
         .order("name")
       setPets((data as Pet[]) ?? [])
@@ -73,22 +75,12 @@ export default function MyPetsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {pets.map((pet) => (
-            <div key={pet.id} className="relative">
-              <PetCard pet={pet} variant="owner" />
-              <Link
-                href={`/klijent/ljubimci/${pet.id}/uredi`}
-                className="absolute top-3 right-3 flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs"
-                style={{
-                  background: "var(--surface-raised)",
-                  color:      "var(--text-secondary)",
-                  border:     "1px solid var(--border)",
-                  fontWeight: 600,
-                }}
-              >
-                <Pencil size={11} strokeWidth={2} />
-                Uredi
-              </Link>
-            </div>
+            <PetCard
+              key={pet.id}
+              pet={pet}
+              variant="owner"
+              onClick={() => router.push(`/klijent/ljubimci/${pet.id}/uredi`)}
+            />
           ))}
         </div>
       )}

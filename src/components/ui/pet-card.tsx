@@ -26,6 +26,8 @@ export interface PetCardProps {
   ownerPhone?: string
   onClick?: () => void
   className?: string
+  lastVisitDate?: string
+  nextApptDate?: string
 }
 
 type Status = "overdue" | "soon" | "ok" | "none"
@@ -39,7 +41,7 @@ function getStatus(dateStr: string | null | undefined): Status {
 }
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("sr-RS", { day: "numeric", month: "short", year: "numeric" })
+  return new Date(d).toLocaleDateString("sr-Latn-RS", { day: "numeric", month: "short", year: "numeric" })
 }
 
 function daysText(dateStr: string): string {
@@ -59,7 +61,7 @@ const STATUS_DOT: Record<Status, string> = {
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, className = "" }: PetCardProps) {
+export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, className = "", lastVisitDate, nextApptDate }: PetCardProps) {
   const species  = SPECIES_STYLE[pet.species] ?? SPECIES_STYLE.other
   const vaccSt   = getStatus(pet.next_vaccine_date)
   const ctrlSt   = getStatus(pet.next_control_date)
@@ -141,6 +143,7 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
           label="Vakcinacija"
           value={pet.next_vaccine_date ? daysText(pet.next_vaccine_date) : "—"}
           pulse={vaccSt === "overdue" || vaccSt === "soon"}
+          subtitle={pet.vaccine_note ?? undefined}
         />
         {/* Control */}
         <InfoPill
@@ -155,6 +158,22 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
             dot="var(--blue)"
             label="Težina"
             value={`${pet.weight_kg} kg`}
+          />
+        )}
+        {/* Last visit */}
+        {lastVisitDate && (
+          <InfoPill
+            dot="var(--text-muted)"
+            label="Poslednja poseta"
+            value={fmtDate(lastVisitDate)}
+          />
+        )}
+        {/* Next appointment */}
+        {nextApptDate && (
+          <InfoPill
+            dot="var(--brand)"
+            label="Sledeći termin"
+            value={fmtDate(nextApptDate)}
           />
         )}
       </div>
@@ -189,8 +208,8 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
-function InfoPill({ dot, label, value, pulse = false }: {
-  dot: string; label: string; value: string; pulse?: boolean
+function InfoPill({ dot, label, value, pulse = false, subtitle }: {
+  dot: string; label: string; value: string; pulse?: boolean; subtitle?: string
 }) {
   return (
     <div style={{
@@ -218,6 +237,14 @@ function InfoPill({ dot, label, value, pulse = false }: {
         }}>
           {value}
         </div>
+        {subtitle && (
+          <div style={{
+            fontSize: 10, fontWeight: 500, color: "var(--text-muted)",
+            lineHeight: 1.2, marginTop: 1,
+          }}>
+            {subtitle.length > 30 ? `${subtitle.slice(0, 30)}…` : subtitle}
+          </div>
+        )}
       </div>
     </div>
   )

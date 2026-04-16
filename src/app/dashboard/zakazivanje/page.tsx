@@ -2,49 +2,22 @@
 
 import { Suspense, useEffect, useState, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight, Banknote, Sparkles, AlertTriangle } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
+import {
+  buildOccupiedIntervals,
+  generateOptimizedSlots,
+  formatSlot,
+  toLocalDateStr,
+  type RankedSlot,
+} from "@/lib/scheduling"
 import type { Pet, Service, ClinicHours } from "@/lib/types"
 
 type ConnectedOwner = {
   id: string
   full_name: string
   petCount: number
-}
-
-type OccupiedInterval = { start: number; end: number }
-
-function toLocalDateStr(d: Date): string {
-  const pad = (n: number) => n.toString().padStart(2, "0")
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-function overlaps(slotStart: number, slotEnd: number, intervals: OccupiedInterval[]): boolean {
-  return intervals.some((iv) => slotStart < iv.end && slotEnd > iv.start)
-}
-
-function generateSlots(
-  date: string,
-  durationMin: number,
-  intervals: OccupiedInterval[],
-  openTime: string,
-  closeTime: string,
-): string[] {
-  const [openH, openM]   = openTime.split(":").map(Number)
-  const [closeH, closeM] = closeTime.split(":").map(Number)
-  const openMinutes  = openH * 60 + openM
-  const closeMinutes = closeH * 60 + closeM
-  const slots: string[] = []
-  const baseDate = new Date(`${date}T00:00:00`)
-  for (let min = openMinutes; min + durationMin <= closeMinutes; min += durationMin) {
-    const slotStart = baseDate.getTime() + min * 60_000
-    const slotEnd   = slotStart + durationMin * 60_000
-    if (!overlaps(slotStart, slotEnd, intervals)) {
-      slots.push(new Date(slotStart).toISOString())
-    }
-  }
-  return slots
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -66,10 +39,6 @@ function getWeekDays(weekStart: Date): Date[] {
     d.setDate(d.getDate() + i)
     return d
   })
-}
-
-function formatSlot(iso: string) {
-  return new Date(iso).toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
 }
 
 type Step = 1 | 2 | 3 | 4 | 5
@@ -97,10 +66,11 @@ function VetBookingPageInner() {
   const [clinicHoursMap,  setClinicHoursMap]  = useState<Map<number, ClinicHours>>(new Map())
   const [weekStart,       setWeekStart]       = useState<Date>(() => startOfWeek(new Date()))
   const [selectedDate,    setSelectedDate]    = useState<Date | null>(null)
-  const [availableSlots,  setAvailableSlots]  = useState<string[]>([])
+  const [rankedSlots,     setRankedSlots]     = useState<RankedSlot[]>([])
   const [selectedSlot,    setSelectedSlot]    = useState("")
   const [loadingSlots,    setLoadingSlots]    = useState(false)
   const [errorMsg,        setErrorMsg]        = useState("")
+  const [showAllSlots,    setShowAllSlots]    = useState(false)
 
   // Initial load
   useEffect(() => {
@@ -191,6 +161,7 @@ function VetBookingPageInner() {
     if (!selectedDate || !selectedService || !clinicId) return
     async function loadSlots() {
       setLoadingSlots(true)
+      setShowAllSlots(false)
       const supabase = createClient()
       const dayStr   = toLocalDateStr(selectedDate!)
       const dayStartDate = new Date(`${dayStr}T00:00:00`)
@@ -205,28 +176,35 @@ function VetBookingPageInner() {
         .lte("scheduled_at", dayEndDate.toISOString())
 
       const appts = apptData ?? []
-      let intervals: OccupiedInterval[] = []
+      let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
 
       if (appts.length > 0) {
         const bookedServiceIds = [...new Set(appts.map((a: { service_id: string }) => a.service_id))]
         const { data: bookedSvcs } = await supabase
-          .from("services").select("id, duration_minutes").in("id", bookedServiceIds)
-        const durationMap = Object.fromEntries(
-          (bookedSvcs ?? []).map((s: { id: string; duration_minutes: number }) => [s.id, s.duration_minutes])
+          .from("services")
+          .select("id, duration_minutes, buffer_after_minutes")
+          .in("id", bookedServiceIds)
+        serviceMap = Object.fromEntries(
+          (bookedSvcs ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
+            s.id,
+            { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
+          ])
         )
-        intervals = appts.map((a: { scheduled_at: string; service_id: string }) => {
-          const start  = new Date(a.scheduled_at).getTime()
-          const durMin = durationMap[a.service_id] ?? 30
-          return { start, end: start + durMin * 60_000 }
-        })
       }
+
+      const intervals = buildOccupiedIntervals(appts, serviceMap)
 
       const weekday   = selectedDate!.getDay()
       const hours     = clinicHoursMap.get(weekday)
       const openTime  = hours?.open_time  ?? "09:00"
       const closeTime = hours?.close_time ?? "17:00"
 
-      setAvailableSlots(generateSlots(dayStr, selectedService!.duration_minutes, intervals, openTime, closeTime))
+      const ranked = generateOptimizedSlots(
+        { date: dayStr, durationMin: selectedService!.duration_minutes, intervals, openTime, closeTime },
+        "advisory",
+        selectedService!.duration_minutes,
+      )
+      setRankedSlots(ranked)
       setLoadingSlots(false)
     }
     loadSlots()
@@ -244,6 +222,7 @@ function VetBookingPageInner() {
       owner_id:     selectedOwner.id,
       scheduled_at: selectedSlot,
       status:       "confirmed",
+      booked_by:    "vet",
     })
     setSaving(false)
     if (error) {
@@ -449,10 +428,16 @@ function VetBookingPageInner() {
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{svc.description}</p>
                   )}
                 </div>
-                <span className="badge badge-blue shrink-0">
-                  <Clock size={10} strokeWidth={2} />
-                  {svc.duration_minutes} min
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="badge badge-blue">
+                    <Clock size={10} strokeWidth={2} />
+                    {svc.duration_minutes} min
+                  </span>
+                  <span className="badge badge-green" style={{ gap: 4 }}>
+                    <Banknote size={10} strokeWidth={2} />
+                    {svc.price_rsd.toLocaleString("sr-Latn-RS")} RSD
+                  </span>
+                </div>
               </motion.button>
             ))
           )}
@@ -520,53 +505,129 @@ function VetBookingPageInner() {
           </div>
 
           {/* Slots */}
-          {selectedDate && (
-            <motion.div
-              key={selectedDate.toISOString()}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className="solid-card rounded-2xl p-5"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <div className="icon-sm icon-blue">
-                  <CalendarDays size={14} strokeWidth={2} />
-                </div>
-                <p className="text-sm" style={{ fontWeight: 600 }}>
-                  {selectedDate.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "long" })}
-                </p>
-              </div>
-              {loadingSlots ? (
-                <div className="grid grid-cols-4 gap-2">
-                  {[...Array(8)].map((_, i) => (
-                    <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
-                  ))}
-                </div>
-              ) : availableSlots.length === 0 ? (
-                <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-                  Nema slobodnih termina za ovaj dan.
-                </p>
-              ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {availableSlots.map((slot) => (
+          {selectedDate && (() => {
+            const hasRecommended = rankedSlots.some((s) => s.rank.isContiguous)
+            const hasNonRecommended = rankedSlots.some((s) => !s.rank.isContiguous)
+            const visibleSlots = showAllSlots ? rankedSlots : rankedSlots.filter((s) => s.rank.isContiguous)
+            const displaySlots = visibleSlots.length > 0 ? visibleSlots : rankedSlots
+
+            return (
+              <motion.div
+                key={selectedDate.toISOString()}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="solid-card rounded-2xl p-5"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="icon-sm icon-blue">
+                      <CalendarDays size={14} strokeWidth={2} />
+                    </div>
+                    <p className="text-sm" style={{ fontWeight: 600 }}>
+                      {selectedDate.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "long" })}
+                    </p>
+                  </div>
+                  {hasRecommended && hasNonRecommended && (
                     <button
-                      key={slot}
-                      onClick={() => setSelectedSlot(slot)}
-                      className="py-2.5 rounded-xl text-sm font-medium transition-all"
+                      onClick={() => setShowAllSlots((v) => !v)}
+                      className="text-xs px-2.5 py-1 rounded-lg transition-all"
                       style={{
-                        background:  selectedSlot === slot ? "var(--brand)" : "var(--surface-raised)",
-                        color:       selectedSlot === slot ? "#fff" : "var(--text-primary)",
-                        border:      `1px solid ${selectedSlot === slot ? "var(--brand)" : "var(--border)"}`,
-                        fontWeight:  selectedSlot === slot ? 700 : 500,
+                        color: showAllSlots ? "var(--text-muted)" : "var(--brand)",
+                        background: showAllSlots ? "var(--surface-raised)" : "var(--brand-tint)",
+                        border: `1px solid ${showAllSlots ? "var(--border)" : "rgba(43,181,160,0.25)"}`,
+                        fontWeight: 600,
                       }}
                     >
-                      {formatSlot(slot)}
+                      {showAllSlots ? "Samo preporučeni" : "Prikaži sve termine"}
                     </button>
-                  ))}
+                  )}
                 </div>
-              )}
-            </motion.div>
-          )}
+                {loadingSlots ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+                    ))}
+                  </div>
+                ) : rankedSlots.length === 0 ? (
+                  <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
+                    Nema slobodnih termina za ovaj dan.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      {displaySlots.map((slot) => {
+                        const isSelected = selectedSlot === slot.iso
+                        const isRecommended = slot.rank.isContiguous
+                        return (
+                          <button
+                            key={slot.iso}
+                            onClick={() => setSelectedSlot(slot.iso)}
+                            className="relative py-2.5 rounded-xl text-sm font-medium transition-all"
+                            style={{
+                              background: isSelected
+                                ? "var(--brand)"
+                                : isRecommended
+                                  ? "var(--brand-tint)"
+                                  : "var(--surface-raised)",
+                              color: isSelected
+                                ? "#fff"
+                                : isRecommended
+                                  ? "var(--brand)"
+                                  : "var(--text-secondary)",
+                              border: `1px solid ${
+                                isSelected
+                                  ? "var(--brand)"
+                                  : isRecommended
+                                    ? "rgba(43,181,160,0.25)"
+                                    : "var(--border)"
+                              }`,
+                              fontWeight: isSelected || isRecommended ? 700 : 500,
+                              opacity: !isRecommended && !isSelected ? 0.75 : 1,
+                            }}
+                            title={
+                              isRecommended
+                                ? "Preporučeno — bez praznine"
+                                : `Ostavlja prazninu od ${slot.rank.gapMinutes} min`
+                            }
+                          >
+                            {formatSlot(slot.iso)}
+                            {isRecommended && !isSelected && (
+                              <span
+                                className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full"
+                                style={{
+                                  width: 16,
+                                  height: 16,
+                                  background: "var(--green)",
+                                  color: "#fff",
+                                }}
+                              >
+                                <Sparkles size={8} strokeWidth={2.5} />
+                              </span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {selectedSlot && !rankedSlots.find((s) => s.iso === selectedSlot)?.rank.isContiguous && (
+                      <div
+                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                        style={{
+                          background: "var(--amber-tint)",
+                          color: "var(--amber-text)",
+                          border: "1px solid rgba(217,119,6,0.18)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <AlertTriangle size={12} strokeWidth={2.5} />
+                        Ostavlja prazninu od {rankedSlots.find((s) => s.iso === selectedSlot)?.rank.gapMinutes ?? 0} min u rasporedu
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )
+          })()}
 
           {errorMsg && (
             <motion.div

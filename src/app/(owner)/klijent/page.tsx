@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { PawPrint, CalendarDays, X } from "lucide-react"
+import { PawPrint, CalendarDays, X, History, Stethoscope, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -33,11 +33,15 @@ type AppointmentRow = Appointment & { service_name: string; pet_name: string }
 export default function OwnerHomePage() {
   const [pets,         setPets]         = useState<Pet[]>([])
   const [appointments, setAppointments] = useState<AppointmentRow[]>([])
+  const [pastAppts,    setPastAppts]    = useState<AppointmentRow[]>([])
   const [ownerName,    setOwnerName]    = useState("")
   const [loading,      setLoading]      = useState(true)
   const [selectedPet,  setSelectedPet]  = useState<Pet | null>(null)
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null)
   const [cancelling,   setCancelling]   = useState(false)
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false)
+  const [lastVisitMap,  setLastVisitMap]  = useState<Record<string, string>>({})
+  const [nextApptMap,   setNextApptMap]   = useState<Record<string, string>>({})
 
   useEffect(() => {
     async function load() {
@@ -50,32 +54,55 @@ export default function OwnerHomePage() {
       setOwnerName(profile?.full_name ?? "")
 
       const { data: petsData } = await supabase
-        .from("pets").select("*").eq("owner_id", user.id).order("name")
+        .from("pets").select("id, owner_id, name, species, breed, birth_date, weight_kg, next_vaccine_date, next_control_date, chip_id, passport_number, gender, color, owner_notes, vaccine_note, created_at").eq("owner_id", user.id).order("name")
       setPets((petsData as Pet[]) ?? [])
 
-      const { data: apptData } = await supabase
-        .from("appointments").select("*")
-        .eq("owner_id", user.id)
-        .in("status", ["confirmed"])
-        .gte("scheduled_at", new Date().toISOString())
-        .order("scheduled_at")
-        .limit(5)
+      const now = new Date().toISOString()
 
-      if (apptData?.length) {
-        const serviceIds = [...new Set(apptData.map((a) => a.service_id))]
-        const petIds     = [...new Set(apptData.map((a) => a.pet_id))]
+      const apptCols = "id, clinic_id, pet_id, service_id, owner_id, scheduled_at, status, booked_by, created_at"
+      const [{ data: upcomingData }, { data: pastData }] = await Promise.all([
+        supabase.from("appointments").select(apptCols)
+          .eq("owner_id", user.id)
+          .in("status", ["confirmed"])
+          .gte("scheduled_at", now)
+          .order("scheduled_at"),
+        supabase.from("appointments").select(apptCols)
+          .eq("owner_id", user.id)
+          .lt("scheduled_at", now)
+          .order("scheduled_at", { ascending: false })
+          .limit(10),
+      ])
+
+      const allAppts = [...(upcomingData ?? []), ...(pastData ?? [])]
+      if (allAppts.length) {
+        const serviceIds = [...new Set(allAppts.map((a) => a.service_id))]
+        const petIds     = [...new Set(allAppts.map((a) => a.pet_id))]
         const [{ data: services }, { data: petsList }] = await Promise.all([
           supabase.from("services").select("id, name").in("id", serviceIds),
           supabase.from("pets").select("id, name").in("id", petIds),
         ])
         const sMap = Object.fromEntries((services ?? []).map((s: { id: string; name: string }) => [s.id, s.name]))
         const pMap = Object.fromEntries((petsList ?? []).map((p: { id: string; name: string }) => [p.id, p.name]))
-        setAppointments(apptData.map((a) => ({
+        const enrich = (a: Appointment) => ({
           ...a,
           service_name: sMap[a.service_id] ?? "—",
           pet_name:     pMap[a.pet_id]     ?? "—",
-        })))
+        })
+        setAppointments((upcomingData ?? []).map(enrich))
+        setPastAppts((pastData ?? []).map(enrich))
       }
+
+      const lvMap: Record<string, string> = {}
+      const naMap: Record<string, string> = {}
+      for (const a of (pastData ?? [])) {
+        if (a.status === "confirmed" && !lvMap[a.pet_id]) lvMap[a.pet_id] = a.scheduled_at
+      }
+      for (const a of (upcomingData ?? [])) {
+        if (a.status === "confirmed" && !naMap[a.pet_id]) naMap[a.pet_id] = a.scheduled_at
+      }
+      setLastVisitMap(lvMap)
+      setNextApptMap(naMap)
+
       setLoading(false)
     }
     load()
@@ -138,6 +165,8 @@ export default function OwnerHomePage() {
               pet={pet}
               variant="owner"
               onClick={() => setSelectedPet(pet)}
+              lastVisitDate={lastVisitMap[pet.id]}
+              nextApptDate={nextApptMap[pet.id]}
             />
           ))}
         </div>
@@ -164,13 +193,29 @@ export default function OwnerHomePage() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {appointments.map((a) => (
+            {(showAllUpcoming ? appointments : appointments.slice(0, 3)).map((a) => (
               <div key={a.id} className="solid-card rounded-xl p-3 flex items-center gap-3">
                 <div className="icon-sm icon-brand flex-none">
                   <CalendarDays size={14} strokeWidth={2} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm" style={{ fontWeight: 600 }}>{a.service_name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm" style={{ fontWeight: 600 }}>{a.service_name}</p>
+                    {a.booked_by === "vet" && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px]"
+                        style={{
+                          fontWeight: 600,
+                          background: "var(--blue-tint)",
+                          color: "var(--blue)",
+                          border: "1px solid rgba(37,99,235,0.15)",
+                        }}
+                      >
+                        <Stethoscope size={9} strokeWidth={2.5} />
+                        Zakazao veterinar
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {a.pet_name} · {formatDateTime(a.scheduled_at)}
                   </p>
@@ -191,9 +236,59 @@ export default function OwnerHomePage() {
                 )}
               </div>
             ))}
+            {!showAllUpcoming && appointments.length > 3 && (
+              <button
+                onClick={() => setShowAllUpcoming(true)}
+                className="w-full py-2 text-xs flex items-center justify-center gap-1 rounded-lg"
+                style={{
+                  fontWeight: 600,
+                  color: "var(--brand)",
+                  background: "var(--brand-tint)",
+                  border: "1px solid rgba(43,181,160,0.15)",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <ChevronDown size={14} strokeWidth={2} />
+                Prikaži sve ({appointments.length})
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* ── Past appointment history ── */}
+      {pastAppts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={16} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+            <h2 className="font-semibold">Istorija poseta</h2>
+          </div>
+          <div className="space-y-2">
+            {pastAppts.map((a) => {
+              const statusCfg =
+                a.status === "confirmed"
+                  ? { cls: "badge-brand", label: "Završen" }
+                  : a.status === "cancelled"
+                    ? { cls: "badge-muted", label: "Otkazan" }
+                    : { cls: "badge-red", label: "Nije došao" }
+              return (
+                <div key={a.id} className="solid-card rounded-xl p-3 flex items-center gap-3" style={{ opacity: 0.85 }}>
+                  <div className="icon-sm icon-muted flex-none">
+                    <CalendarDays size={14} strokeWidth={2} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm" style={{ fontWeight: 600 }}>{a.service_name}</p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {a.pet_name} · {formatDateTime(a.scheduled_at)}
+                    </p>
+                  </div>
+                  <span className={`badge shrink-0 ${statusCfg.cls}`}>{statusCfg.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Pet detail dialog ── */}
       <Dialog open={!!selectedPet} onOpenChange={(open) => !open && setSelectedPet(null)}>
@@ -204,7 +299,13 @@ export default function OwnerHomePage() {
 
           {selectedPet && (
             <>
-              <PetCard pet={selectedPet} variant="owner" className="rounded-none border-0 shadow-none" />
+              <PetCard
+                pet={selectedPet}
+                variant="owner"
+                className="rounded-none border-0 shadow-none"
+                lastVisitDate={lastVisitMap[selectedPet.id]}
+                nextApptDate={nextApptMap[selectedPet.id]}
+              />
 
               {/* Action footer */}
               <div

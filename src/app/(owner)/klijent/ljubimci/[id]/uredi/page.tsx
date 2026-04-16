@@ -37,6 +37,7 @@ export default function EditPetPage() {
   const [birthDate,      setBirthDate]      = useState("")
   const [color,          setColor]          = useState("")
   const [weightKg,       setWeightKg]       = useState("")
+  const [ownerNotes,     setOwnerNotes]     = useState("")
   const [saving,         setSaving]         = useState(false)
   const [error,          setError]          = useState<string | null>(null)
   const [loading,        setLoading]        = useState(true)
@@ -49,14 +50,14 @@ export default function EditPetPage() {
 
       const { data } = await supabase
         .from("pets")
-        .select("id, name, species, breed, gender, chip_id, passport_number, birth_date, color, weight_kg")
+        .select("id, name, species, breed, gender, chip_id, passport_number, birth_date, color, weight_kg, owner_notes")
         .eq("id", petId)
         .eq("owner_id", user.id)
         .single()
 
       if (!data) { router.push("/klijent/ljubimci"); return }
 
-      const pet = data as Omit<Pet, "owner_id" | "next_vaccine_date" | "next_control_date" | "vet_notes" | "created_at">
+      const pet = data as Omit<Pet, "owner_id" | "next_vaccine_date" | "next_control_date" | "vet_notes" | "vaccine_note" | "created_at">
       setName(pet.name)
       setSpecies(pet.species)
       setBreed(pet.breed ?? "")
@@ -66,6 +67,7 @@ export default function EditPetPage() {
       setBirthDate(pet.birth_date ?? "")
       setColor(pet.color ?? "")
       setWeightKg(pet.weight_kg !== null ? String(pet.weight_kg) : "")
+      setOwnerNotes(pet.owner_notes ?? "")
       setLoading(false)
     }
     load()
@@ -92,6 +94,7 @@ export default function EditPetPage() {
         birth_date:      birthDate || null,
         color:           color.trim() || null,
         weight_kg:       weightKg ? parseFloat(weightKg) : null,
+        owner_notes:     ownerNotes.trim() || null,
       })
       .eq("id", petId)
       .eq("owner_id", user.id)
@@ -255,6 +258,28 @@ export default function EditPetPage() {
                 value={weightKg}
                 onChange={(e) => setWeightKg(e.target.value)}
               />
+            </div>
+
+            {/* Napomena za veterinara */}
+            <div className="space-y-1.5">
+              <Label htmlFor="ownerNotes">Napomena za veterinara</Label>
+              <textarea
+                id="ownerNotes"
+                className="w-full min-h-[100px] rounded-xl text-sm resize-y px-3 py-2"
+                style={{
+                  background: "var(--yellow-tint, #FEF9C3)",
+                  color: "var(--text-primary)",
+                  border: "1px solid rgba(234,179,8,0.2)",
+                  lineHeight: 1.6,
+                  fontFamily: "inherit",
+                }}
+                placeholder="npr. alergije, hronična stanja, navike u ponašanju..."
+                value={ownerNotes}
+                onChange={(e) => setOwnerNotes(e.target.value)}
+              />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Ova napomena je uvek vidljiva Vašem veterinaru.
+              </p>
             </div>
 
             {error && <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>}

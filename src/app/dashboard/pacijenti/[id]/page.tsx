@@ -14,6 +14,9 @@ import {
   Lock,
   Info,
   X,
+  MessageSquareText,
+  FileText,
+  ChevronDown,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
@@ -36,6 +39,7 @@ type ApptHistoryRow = {
   scheduled_at: string
   status: AppointmentStatus
   service_name: string
+  vet_notes: string | null
 }
 
 const SPECIES_LABEL: Record<Species, string> = {
@@ -208,7 +212,11 @@ export default function PetProfilePage() {
   const [nextVaccineDate, setNextVaccineDate] = useState("")
   const [nextControlDate, setNextControlDate] = useState("")
   const [vetNotes, setVetNotes] = useState("")
+  const [vaccineNote, setVaccineNote] = useState("")
   const [activeTab, setActiveTab] = useState<FolderTab>("podaci")
+  const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
+  const [apptNoteText, setApptNoteText] = useState("")
+  const [savingApptNote, setSavingApptNote] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -235,13 +243,14 @@ export default function PetProfilePage() {
       setNextVaccineDate(p.next_vaccine_date ?? "")
       setNextControlDate(p.next_control_date ?? "")
       setVetNotes(p.vet_notes ?? "")
+      setVaccineNote(p.vaccine_note ?? "")
 
       const { data: ownerData } = await supabase.from("profiles").select("*").eq("id", p.owner_id).single()
       setOwner(ownerData as Profile)
 
       const { data: apptData } = await supabase
         .from("appointments")
-        .select("id, scheduled_at, status, service_id")
+        .select("id, scheduled_at, status, service_id, vet_notes")
         .eq("pet_id", petId)
         .order("scheduled_at", { ascending: false })
         .limit(25)
@@ -254,11 +263,12 @@ export default function PetProfilePage() {
         )
         setApptHistory(
           apptData.map(
-            (a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string }) => ({
+            (a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string; vet_notes: string | null }) => ({
               id: a.id,
               scheduled_at: a.scheduled_at,
               status: a.status,
               service_name: svcMap[a.service_id] ?? "—",
+              vet_notes: a.vet_notes ?? null,
             })
           )
         )
@@ -306,6 +316,7 @@ export default function PetProfilePage() {
         next_vaccine_date: nextVaccineDate || null,
         next_control_date: nextControlDate || null,
         vet_notes: vetNotes || null,
+        vaccine_note: vaccineNote.trim() || null,
       })
       .eq("id", pet.id)
     setSaving(false)
@@ -327,10 +338,26 @@ export default function PetProfilePage() {
         next_vaccine_date: nextVaccineDate || null,
         next_control_date: nextControlDate || null,
         vet_notes: vetNotes || null,
+        vaccine_note: vaccineNote.trim() || null,
       }
       setPet(updated)
       setEditingBasics(false)
       setTimeout(() => setSaved(false), 3000)
+    }
+  }
+
+  async function handleSaveApptNote(apptId: string) {
+    setSavingApptNote(true)
+    const supabase = createClient()
+    const { error: updateError } = await supabase
+      .from("appointments")
+      .update({ vet_notes: apptNoteText.trim() || null })
+      .eq("id", apptId)
+    setSavingApptNote(false)
+    if (!updateError) {
+      setApptHistory((prev) =>
+        prev.map((a) => a.id === apptId ? { ...a, vet_notes: apptNoteText.trim() || null } : a)
+      )
     }
   }
 
@@ -565,6 +592,27 @@ export default function PetProfilePage() {
             {/* Tab: Beleske */}
             {activeTab === "beleske" && (
               <motion.div key="beleske" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+                {/* Owner's note (read-only for vet) */}
+                {pet.owner_notes && (
+                  <div
+                    className="rounded-xl px-4 py-3 mb-5"
+                    style={{
+                      background: "var(--yellow-tint, #FEF9C3)",
+                      border: "1px solid rgba(234,179,8,0.2)",
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <MessageSquareText size={13} strokeWidth={2} style={{ color: "var(--yellow, #EAB308)" }} />
+                      <span className="text-xs" style={{ fontWeight: 700, color: "var(--text-secondary)" }}>
+                        Vlasnik kaže:
+                      </span>
+                    </div>
+                    <p className="text-sm" style={{ color: "var(--text-primary)", lineHeight: 1.6 }}>
+                      {pet.owner_notes}
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 mb-3">
                   <h3 className="text-sm" style={{ fontWeight: 600 }}>Beleške veterinara</h3>
                   <span className="badge badge-muted" style={{ gap: 4 }}>
@@ -613,6 +661,8 @@ export default function PetProfilePage() {
                             ? { cls: "badge-muted", label: "Otkazan" }
                             : { cls: "badge-red", label: "Nije došao" }
                       const dotMuted = appt.status !== "confirmed"
+                      const isExpanded = expandedApptId === appt.id
+                      const hasNote = !!appt.vet_notes
                       return (
                         <li key={appt.id} className={`relative pl-7 ${isLast ? "" : "pb-6"}`}>
                           {!isLast && (
@@ -629,11 +679,85 @@ export default function PetProfilePage() {
                             }}
                           />
                           <div className="flex flex-wrap items-start justify-between gap-2 gap-y-1">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>{appt.service_name}</p>
                               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{dateStr} · {timeStr}</p>
                             </div>
-                            <span className={`badge shrink-0 ${statusBadge.cls}`}>{statusBadge.label}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {hasNote && !isExpanded && (
+                                <span className="badge badge-blue" style={{ gap: 3 }}>
+                                  <FileText size={10} strokeWidth={2} />
+                                  Beleška
+                                </span>
+                              )}
+                              <span className={`badge shrink-0 ${statusBadge.cls}`}>{statusBadge.label}</span>
+                            </div>
+                          </div>
+
+                          {/* Note toggle + inline editor */}
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setExpandedApptId(null)
+                                } else {
+                                  setExpandedApptId(appt.id)
+                                  setApptNoteText(appt.vet_notes ?? "")
+                                }
+                              }}
+                              className="flex items-center gap-1.5 text-xs rounded-lg px-2 py-1"
+                              style={{
+                                fontWeight: 600,
+                                color: isExpanded ? "var(--brand)" : "var(--text-muted)",
+                                background: isExpanded ? "var(--brand-tint)" : "transparent",
+                                border: isExpanded ? "1px solid rgba(43,181,160,0.15)" : "1px solid transparent",
+                                transition: "all 0.3s ease",
+                              }}
+                            >
+                              {isExpanded ? <ChevronDown size={12} strokeWidth={2} style={{ transform: "rotate(180deg)" }} /> : <FileText size={12} strokeWidth={2} />}
+                              {isExpanded ? "Zatvori" : hasNote ? "Prikaži belešku" : "Dodaj belešku"}
+                            </button>
+
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                transition={{ duration: 0.2 }}
+                                className="mt-2"
+                              >
+                                <textarea
+                                  className="vet-notes-textarea w-full min-h-[80px] rounded-xl text-sm resize-y px-3 py-2"
+                                  style={{
+                                    background: "var(--blue-tint)",
+                                    color: "var(--text-primary)",
+                                    lineHeight: 1.6,
+                                    fontFamily: "inherit",
+                                  }}
+                                  placeholder="Beleška sa ove posete…"
+                                  value={apptNoteText}
+                                  onChange={(e) => setApptNoteText(e.target.value)}
+                                />
+                                <div className="flex items-center gap-2 mt-2">
+                                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveApptNote(appt.id)}
+                                      disabled={savingApptNote}
+                                      className="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5"
+                                      style={{ fontWeight: 600 }}
+                                    >
+                                      {savingApptNote ? <span className="animate-spin inline-block">↻</span> : <Save size={12} strokeWidth={2} />}
+                                      {savingApptNote ? "Čuvanje..." : "Sačuvaj"}
+                                    </button>
+                                  </motion.div>
+                                  <span className="badge badge-muted" style={{ gap: 3 }}>
+                                    <Lock size={9} strokeWidth={2} />
+                                    Samo vet
+                                  </span>
+                                </div>
+                              </motion.div>
+                            )}
                           </div>
                         </li>
                       )
@@ -658,6 +782,16 @@ export default function PetProfilePage() {
                   </div>
                   <FieldLabel>Sledeća vakcinacija</FieldLabel>
                   <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} className="mt-1.5 max-w-xs" />
+                  <div className="mt-3">
+                    <FieldLabel>Napomena (npr. Besnilo, revakcinacija)</FieldLabel>
+                    <Input
+                      id="vaccineNote"
+                      value={vaccineNote}
+                      onChange={(e) => setVaccineNote(e.target.value)}
+                      className="mt-1.5 max-w-xs"
+                      placeholder="Tip vakcine ili napomena..."
+                    />
+                  </div>
                 </div>
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 24 }}>
                   <div className="flex items-center gap-2 mb-3">

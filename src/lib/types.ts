@@ -39,6 +39,8 @@ export interface Pet {
   gender:             Gender | null
   color:              string | null
   vet_notes:          string | null
+  owner_notes:        string | null
+  vaccine_note:       string | null
   created_at:         string
 }
 
@@ -50,13 +52,15 @@ export interface Connection {
 }
 
 export interface Service {
-  id:               string
-  clinic_id:        string
-  name:             string
-  duration_minutes: 15 | 30 | 60
-  description:      string | null
-  is_active:        boolean
-  created_at:       string
+  id:                   string
+  clinic_id:            string
+  name:                 string
+  duration_minutes:     number
+  description:          string | null
+  price_rsd:            number
+  buffer_after_minutes: number
+  is_active:            boolean
+  created_at:           string
 }
 
 export interface Appointment {
@@ -67,6 +71,8 @@ export interface Appointment {
   owner_id:     string
   scheduled_at: string
   status:       AppointmentStatus
+  booked_by:    'owner' | 'vet'
+  vet_notes:    string | null
   created_at:   string
 }
 

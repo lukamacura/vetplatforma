@@ -3,72 +3,17 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Building2, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Building2, CheckCircle2, Clock, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import {
+  buildOccupiedIntervals,
+  generateOptimizedSlots,
+  getAvailableDays,
+  formatSlot,
+} from "@/lib/scheduling"
 import type { Pet, Service, Clinic, ClinicHours } from "@/lib/types"
-
-type OccupiedInterval = { start: number; end: number }
-
-function toLocalDateStr(d: Date): string {
-  const pad = (n: number) => n.toString().padStart(2, "0")
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-function overlaps(
-  slotStart: number,
-  slotEnd: number,
-  intervals: OccupiedInterval[],
-): boolean {
-  return intervals.some((iv) => slotStart < iv.end && slotEnd > iv.start)
-}
-
-function generateSlots(
-  date: string,
-  durationMin: number,
-  intervals: OccupiedInterval[],
-  openTime: string,
-  closeTime: string,
-): string[] {
-  const [openH, openM]   = openTime.split(":").map(Number)
-  const [closeH, closeM] = closeTime.split(":").map(Number)
-  const openMinutes  = openH * 60 + openM
-  const closeMinutes = closeH * 60 + closeM
-
-  const slots: string[] = []
-  const baseDate = new Date(`${date}T00:00:00`)
-
-  for (let min = openMinutes; min + durationMin <= closeMinutes; min += durationMin) {
-    const slotStart = baseDate.getTime() + min * 60_000
-    const slotEnd   = slotStart + durationMin * 60_000
-    if (!overlaps(slotStart, slotEnd, intervals)) {
-      slots.push(new Date(slotStart).toISOString())
-    }
-  }
-  return slots
-}
-
-function formatSlot(iso: string) {
-  return new Date(iso).toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
-}
-
-function getAvailableDays(hoursMap: Map<number, ClinicHours>): string[] {
-  const days: string[] = []
-  for (let i = 1; i <= 14; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() + i)
-    const weekday = d.getDay()
-    const hours   = hoursMap.get(weekday)
-    if (hours) {
-      if (hours.is_closed) continue
-    } else {
-      if (weekday === 0 || weekday === 6) continue
-    }
-    days.push(toLocalDateStr(d))
-  }
-  return days
-}
 
 function BookingPageInner() {
   const router           = useRouter()
@@ -103,7 +48,7 @@ function BookingPageInner() {
       setUserId(user.id)
 
       const [{ data: petsData }, { data: connsData }] = await Promise.all([
-        supabase.from("pets").select("*").eq("owner_id", user.id).order("name"),
+        supabase.from("pets").select("id, owner_id, name, species, breed, birth_date, weight_kg, next_vaccine_date, next_control_date, chip_id, passport_number, gender, color, owner_notes, vaccine_note, created_at").eq("owner_id", user.id).order("name"),
         supabase.from("connections").select("clinic_id").eq("owner_id", user.id),
       ])
 
@@ -171,28 +116,34 @@ function BookingPageInner() {
         .lte("scheduled_at", dayEndDate.toISOString())
 
       const appts = apptData ?? []
-      let intervals: OccupiedInterval[] = []
+      let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
 
       if (appts.length > 0) {
         const bookedServiceIds = [...new Set(appts.map((a: { service_id: string }) => a.service_id))]
         const { data: bookedServices } = await supabase
-          .from("services").select("id, duration_minutes").in("id", bookedServiceIds)
-        const durationMap = Object.fromEntries(
-          (bookedServices ?? []).map((s: { id: string; duration_minutes: number }) => [s.id, s.duration_minutes])
+          .from("services")
+          .select("id, duration_minutes, buffer_after_minutes")
+          .in("id", bookedServiceIds)
+        serviceMap = Object.fromEntries(
+          (bookedServices ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
+            s.id,
+            { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
+          ])
         )
-        intervals = appts.map((a: { scheduled_at: string; service_id: string }) => {
-          const start  = new Date(a.scheduled_at).getTime()
-          const durMin = durationMap[a.service_id] ?? 30
-          return { start, end: start + durMin * 60_000 }
-        })
       }
+
+      const intervals = buildOccupiedIntervals(appts, serviceMap)
 
       const weekday   = new Date(`${selectedDay}T12:00:00`).getDay()
       const hours     = clinicHoursMap.get(weekday)
       const openTime  = hours?.open_time  ?? "09:00"
       const closeTime = hours?.close_time ?? "17:00"
 
-      setAvailableSlots(generateSlots(selectedDay, selectedService!.duration_minutes, intervals, openTime, closeTime))
+      const ranked = generateOptimizedSlots(
+        { date: selectedDay, durationMin: selectedService!.duration_minutes, intervals, openTime, closeTime },
+        "strict",
+      )
+      setAvailableSlots(ranked.map((r) => r.iso))
     }
     loadSlots()
   }, [selectedDay, selectedService, selectedClinic, clinicHoursMap])
@@ -208,6 +159,7 @@ function BookingPageInner() {
       owner_id:     userId,
       scheduled_at: selectedSlot,
       status:       "confirmed",
+      booked_by:    "owner",
     })
     setSaving(false)
     if (!error) setStep(4)
@@ -268,6 +220,7 @@ function BookingPageInner() {
           <h2 className="text-xl font-bold">Termin zakazan!</h2>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             {selectedPet?.name} · {selectedService?.name}
+            {" · "}<span style={{ color: "var(--green)", fontWeight: 600 }}>{selectedService?.price_rsd.toLocaleString("sr-Latn-RS")} RSD</span>
             <br />{selectedClinic?.name}<br />
             {selectedSlot && (() => {
               const d = new Date(selectedSlot)
@@ -349,10 +302,26 @@ function BookingPageInner() {
                     background:  selectedService?.id === svc.id ? "var(--brand-tint)" : "transparent",
                   }}
                 >
-                  <p className="font-medium">{svc.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {svc.duration_minutes} min{svc.description ? ` · ${svc.description}` : ""}
-                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{svc.name}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {svc.description || ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                        style={{ background: "var(--blue-tint, rgba(37,99,235,0.08))", color: "var(--blue)" }}>
+                        <Clock size={10} strokeWidth={2.5} />
+                        {svc.duration_minutes} min
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                        style={{ background: "var(--green-tint, rgba(22,163,74,0.08))", color: "var(--green)", fontWeight: 600 }}>
+                        <Banknote size={10} strokeWidth={2.5} />
+                        {svc.price_rsd.toLocaleString("sr-Latn-RS")} RSD
+                      </span>
+                    </div>
+                  </div>
                 </button>
               ))
             )}
@@ -419,14 +388,23 @@ function BookingPageInner() {
           </Card>
 
           {selectedSlot && (
-            <Button
-              onClick={handleConfirm}
-              disabled={saving}
-              className="w-full h-12 text-base"
-              style={{ background: "var(--brand)", color: "#fff", border: "none" }}
-            >
-              {saving ? "Zakazivanje..." : "Potvrdi termin"}
-            </Button>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl"
+                style={{ background: "var(--green-tint, rgba(22,163,74,0.08))", border: "1px solid rgba(22,163,74,0.15)" }}>
+                <span className="text-sm" style={{ color: "var(--text-secondary)" }}>Cena usluge</span>
+                <span className="text-base" style={{ color: "var(--green)", fontWeight: 700 }}>
+                  {selectedService?.price_rsd.toLocaleString("sr-Latn-RS")} RSD
+                </span>
+              </div>
+              <Button
+                onClick={handleConfirm}
+                disabled={saving}
+                className="w-full h-12 text-base"
+                style={{ background: "var(--brand)", color: "#fff", border: "none" }}
+              >
+                {saving ? "Zakazivanje..." : "Potvrdi termin"}
+              </Button>
+            </div>
           )}
         </div>
       )}
