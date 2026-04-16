@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import type { Pet, Profile, Species, Gender } from "@/lib/types"
@@ -145,16 +146,14 @@ function PetRowCard({ row, index, onClick }: { row: PetRow; index: number; onCli
     >
       <div className="flex items-center gap-3 px-4 py-3">
         {/* Pet avatar */}
-        <div
-          className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg select-none"
-          style={{
-            background: isOverdue ? "var(--red-tint)" : "var(--surface-raised)",
-            outline: isOverdue ? "2px solid var(--red)" : "none",
-            outlineOffset: 1,
-          }}
-        >
-          {SPECIES_EMOJI[pet.species]}
-        </div>
+        <PetAvatar
+          photoUrl={pet.photo_url}
+          species={pet.species}
+          size={40}
+          rounded="xl"
+          outline={isOverdue ? "2px solid var(--red)" : undefined}
+          outlineOffset="1px"
+        />
 
         {/* Pet info */}
         <div className="flex-1 min-w-0">

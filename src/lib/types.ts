@@ -38,6 +38,7 @@ export interface Pet {
   passport_number:    string | null
   gender:             Gender | null
   color:              string | null
+  photo_url:          string | null
   vet_notes:          string | null
   owner_notes:        string | null
   vaccine_note:       string | null
@@ -89,6 +90,7 @@ export interface ClinicHours {
 export interface AppointmentWithDetails extends Appointment {
   pet_name:         string
   pet_species:      Species
+  pet_photo_url:    string | null
   owner_name:       string
   service_name:     string
   service_duration: number

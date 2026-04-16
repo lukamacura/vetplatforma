@@ -103,6 +103,7 @@ create table if not exists appointments (
   owner_id     uuid references profiles not null,
   scheduled_at timestamptz not null,
   status       text default 'confirmed',
+  vet_notes    text,               -- vet-only per-appointment notes; NEVER exposed to owner
   created_at   timestamptz default now()
 );
 

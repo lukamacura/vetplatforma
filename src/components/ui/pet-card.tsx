@@ -1,5 +1,6 @@
 "use client"
 
+import { PetAvatar } from "@/components/ui/pet-avatar"
 import type { Pet } from "@/lib/types"
 
 // ─── Species config ────────────────────────────────────────────────────────────
@@ -97,16 +98,7 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
     >
       {/* ── Identity row ── */}
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        {/* Emoji circle */}
-        <div style={{
-          width: 64, height: 64, borderRadius: "50%", flexShrink: 0,
-          background: "rgba(255,255,255,0.8)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 32, lineHeight: 1,
-          boxShadow: "0 2px 10px rgba(0,0,0,0.06), inset 0 -1px 3px rgba(0,0,0,0.04)",
-        }}>
-          {SPECIES_EMOJI[pet.species]}
-        </div>
+        <PetAvatar photoUrl={pet.photo_url} species={pet.species} size={64} />
 
         <div style={{ minWidth: 0, flex: 1 }}>
           {/* Pet name */}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, CalendarPlus } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
+import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import type { AppointmentWithDetails } from "@/lib/types"
@@ -125,7 +126,7 @@ function AppointmentRow({
       {/* Pet + service */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm leading-none">{SPECIES_EMOJI[appt.pet_species]}</span>
+          <PetAvatar photoUrl={appt.pet_photo_url} species={appt.pet_species} size={22} />
           <span
             className="text-sm truncate"
             style={{
@@ -273,7 +274,7 @@ export default function DashboardPage() {
         const serviceIds = [...new Set(apptData.map((a) => a.service_id))]
 
         const [{ data: pets }, { data: owners }, { data: services }] = await Promise.all([
-          supabase.from("pets").select("id, name, species").in("id", petIds),
+          supabase.from("pets").select("id, name, species, photo_url").in("id", petIds),
           supabase.from("profiles").select("id, full_name").in("id", ownerIds),
           supabase.from("services").select("id, name, duration_minutes").in("id", serviceIds),
         ])
@@ -286,6 +287,7 @@ export default function DashboardPage() {
           ...a,
           pet_name:         petMap[a.pet_id]?.name           ?? "—",
           pet_species:      petMap[a.pet_id]?.species        ?? "other",
+          pet_photo_url:    petMap[a.pet_id]?.photo_url      ?? null,
           owner_name:       ownerMap[a.owner_id]             ?? "—",
           service_name:     serviceMap[a.service_id]?.name   ?? "—",
           service_duration: serviceMap[a.service_id]?.duration_minutes ?? 30,

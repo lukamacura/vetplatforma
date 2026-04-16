@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Bell, Phone, CalendarPlus, CheckCircle2, Syringe, Stethoscope } from "lucide-react"
 import { motion } from "framer-motion"
+import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import type { Pet, Profile } from "@/lib/types"
@@ -74,9 +75,7 @@ function ReminderRow({ item, index }: { item: ReminderItem; index: number }) {
     >
       {/* Pet identity */}
       <div className="flex items-center gap-2.5 flex-1 min-w-0">
-        <div className={`icon-sm ${iconClass} shrink-0`} style={{ fontSize: 16 }}>
-          {SPECIES_EMOJI[item.pet.species]}
-        </div>
+        <PetAvatar photoUrl={item.pet.photo_url} species={item.pet.species} size={28} />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-700 truncate" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
