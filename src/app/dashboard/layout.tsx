@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, Users, Scissors, LogOut,
-  Stethoscope, Bell, Settings,
+  Bell, Settings,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
@@ -44,27 +45,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }}
       >
         <div
-          className="px-5 py-5 flex items-center gap-3"
+          className="px-4 py-4 flex flex-col items-center gap-2"
           style={{ borderBottom: "1px solid var(--sidebar-border)" }}
         >
-          <div
-            className="icon-md shrink-0"
-            style={{
-              borderRadius: 10,
-              background: "var(--sidebar-accent-glow)",
-              color: "var(--brand)",
-            }}
-          >
-            <Stethoscope size={18} strokeWidth={1.75} />
-          </div>
-          <div>
-            <p className="text-sm tracking-tight leading-none" style={{ color: "var(--sidebar-text-active)", fontWeight: 700 }}>
-              VetPlatforma
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--sidebar-text)", opacity: 0.6 }}>
-              Upravljanje klinikom
-            </p>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="VetPlatforma"
+            width={200}
+            height={200}
+            priority
+            className="h-auto w-[160px] select-none"
+          />
+          <p className="text-xs" style={{ color: "var(--sidebar-text)", opacity: 0.65, fontWeight: 500 }}>
+            Upravljanje klinikom
+          </p>
         </div>
 
         <nav aria-label="Glavna navigacija" className="flex-1 px-3 py-4 space-y-0.5">
@@ -107,25 +101,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <header className="mobile-header fixed top-0 left-0 right-0 md:hidden z-[9999] flex items-center justify-between px-4"
         style={{
           height: 56,
-          background: "var(--surface)",
-          borderBottom: "1px solid var(--border)",
+          background: "var(--sidebar-bg)",
+          borderBottom: "1px solid var(--sidebar-border)",
           paddingTop: "env(safe-area-inset-top, 0px)",
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <div
-            className="icon-sm shrink-0"
-            style={{
-              borderRadius: 8,
-              background: "var(--brand-tint)",
-              color: "var(--brand)",
-            }}
-          >
-            <Stethoscope size={15} strokeWidth={2} aria-hidden="true" />
-          </div>
-          <span className="text-sm tracking-tight" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
-            VetPlatforma
-          </span>
+        <div className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="VetPlatforma"
+            width={160}
+            height={160}
+            priority
+            className="h-10 w-auto select-none"
+          />
         </div>
 
         <button
@@ -133,7 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           aria-label="Odjavi se"
           className="mobile-signout-btn flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all"
           style={{
-            color: "var(--text-muted)",
+            color: "var(--sidebar-text)",
             background: "transparent",
             minHeight: 44,
           }}
@@ -155,9 +144,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         aria-label="Glavna navigacija"
         className="mobile-bottom-nav fixed bottom-0 left-0 right-0 md:hidden flex z-[9999]"
         style={{
-          background:  "var(--surface)",
-          borderTop:   "1px solid var(--border)",
-          boxShadow:   "0 -2px 12px rgba(0,0,0,0.06)",
+          background:  "var(--sidebar-bg)",
+          borderTop:   "1px solid var(--sidebar-border)",
+          boxShadow:   "0 -6px 24px rgba(0, 0, 0, 0.25)",
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
@@ -168,26 +157,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               key={href}
               href={href}
               aria-current={active ? "page" : undefined}
-              className="mobile-nav-tab flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors"
+              className="mobile-nav-tab relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors"
               style={{
-                color: active ? "var(--brand)" : "var(--text-muted)",
-                minHeight: 56,
+                color: active ? "var(--brand)" : "var(--sidebar-text)",
+                minHeight: 60,
               }}
             >
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-full"
+                  style={{
+                    width: 28,
+                    height: 3,
+                    background: "var(--brand)",
+                    boxShadow: "0 0 10px var(--brand-glow)",
+                  }}
+                />
+              )}
               <span
                 className="flex items-center justify-center rounded-full transition-all"
                 aria-hidden="true"
                 style={{
-                  background: active ? "var(--brand-tint)" : "transparent",
+                  background: active ? "var(--brand-subtle)" : "transparent",
                   width:  active ? 48 : 28,
                   height: 28,
+                  boxShadow: active
+                    ? "inset 0 0 0 1px rgba(43, 181, 160, 0.35), 0 0 16px var(--brand-glow)"
+                    : "none",
                 }}
               >
                 <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
               </span>
               <span
-                className="font-semibold leading-none"
-                style={{ fontSize: 11 }}
+                className="leading-none"
+                style={{
+                  fontSize: 11,
+                  fontWeight: active ? 700 : 500,
+                  letterSpacing: "0.01em",
+                  opacity: active ? 1 : 0.85,
+                }}
               >
                 {label}
               </span>

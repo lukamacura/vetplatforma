@@ -2,7 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { Home, CalendarDays, PawPrint, Building2, LogOut, Heart } from "lucide-react"
+import Image from "next/image"
+import { Home, CalendarDays, PawPrint, Building2, LogOut } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 const tabs = [
@@ -40,20 +41,15 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
           paddingTop: "env(safe-area-inset-top, 0px)",
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <div
-            className="icon-sm shrink-0"
-            style={{
-              borderRadius: 8,
-              background: "var(--brand-tint)",
-              color: "var(--brand)",
-            }}
-          >
-            <Heart size={15} strokeWidth={2} aria-hidden="true" />
-          </div>
-          <span className="text-sm tracking-tight" style={{ fontWeight: 700, color: "var(--text-primary)" }}>
-            VetPlatforma
-          </span>
+        <div className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="VetPlatforma"
+            width={160}
+            height={160}
+            priority
+            className="h-10 w-auto select-none"
+          />
         </div>
 
         <button
