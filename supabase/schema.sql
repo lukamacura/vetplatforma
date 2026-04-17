@@ -64,7 +64,7 @@ create table if not exists pets (
   next_vaccine_date date,               -- Critical Three #2
   next_control_date date,               -- Critical Three #3
   chip_id           text,
-  vet_notes         text,               -- vet-only; NEVER exposed to owner
+  vet_notes         text,               -- shared general note (owner + vet, same UI field)
   created_at        timestamptz default now()
 );
 

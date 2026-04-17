@@ -17,17 +17,18 @@ import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import type { Pet, Appointment, Species } from "@/lib/types"
+import {
+  formatDateNumeric,
+  formatDateTimeNumericBelgrade,
+  formatTimeBelgrade,
+  parseCalendarDate,
+  calendarDaysFromToday,
+  belgradeDayKey,
+  todayBelgradeKey,
+  addDaysToKey,
+} from "@/lib/dates"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso)
-  return `${d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })}`
-}
-
-function formatDateShort(iso: string) {
-  return new Date(iso).toLocaleDateString("sr-Latn-RS", { day: "numeric", month: "short" })
-}
 
 function canCancel(scheduledAt: string): boolean {
   return new Date(scheduledAt).getTime() - Date.now() > 2 * 60 * 60 * 1000
@@ -45,14 +46,18 @@ type DateSeverity = "overdue" | "soon" | "ok" | null
 
 function dateStatus(dateStr: string | null | undefined): DateSeverity {
   if (!dateStr) return null
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
+  const d = parseCalendarDate(dateStr)
+  if (!d) return null
+  const days = calendarDaysFromToday(d)
   if (days < 0) return "overdue"
   if (days <= 14) return "soon"
   return "ok"
 }
 
 function daysUntilText(dateStr: string): string {
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
+  const d = parseCalendarDate(dateStr)
+  if (!d) return "—"
+  const days = calendarDaysFromToday(d)
   if (days < 0) return `${Math.abs(days)}d kasni`
   if (days === 0) return "Danas"
   if (days === 1) return "Sutra"
@@ -344,11 +349,13 @@ export default function OwnerHomePage() {
         ) : (
           <div className="space-y-2">
             {(showAllUpcoming ? appointments : appointments.slice(0, 3)).map((a) => {
-              const d = new Date(a.scheduled_at)
-              const isToday = new Date().toDateString() === d.toDateString()
-              const isTomorrow = new Date(new Date().getTime() + 86_400_000).toDateString() === d.toDateString()
-              const dayLabel = isToday ? "Danas" : isTomorrow ? "Sutra" : formatDateShort(a.scheduled_at)
-              const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
+              const apptKey = belgradeDayKey(a.scheduled_at)
+              const todayKey = todayBelgradeKey()
+              const tomorrowKey = addDaysToKey(todayKey, 1)
+              const isToday = apptKey === todayKey
+              const isTomorrow = apptKey === tomorrowKey
+              const dayLabel = isToday ? "Danas" : isTomorrow ? "Sutra" : formatDateNumeric(a.scheduled_at)
+              const timeStr = formatTimeBelgrade(a.scheduled_at)
 
               return (
                 <motion.div
@@ -401,7 +408,7 @@ export default function OwnerHomePage() {
                       )}
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {a.pet_name} · {formatDateTime(a.scheduled_at)}
+                      {a.pet_name} · {formatDateTimeNumericBelgrade(a.scheduled_at)}
                     </p>
                   </div>
 
@@ -532,55 +539,43 @@ export default function OwnerHomePage() {
         )}
       </motion.div>
 
-      {/* ── Vaccine schedule overview ── */}
-      {okReminders.length > 0 && (
+      {/* ── Plan za dalje (vakcine + kontrolni pregledi) ── */}
+      {reminders.length > 0 && (
         <motion.div variants={stagger.item}>
           <div className="solid-card rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="icon-sm icon-amber shrink-0">
                 <Syringe size={13} strokeWidth={2.25} />
               </div>
-              <h3 className="text-sm" style={{ fontWeight: 700 }}>Raspored vakcinacija</h3>
+              <h3 className="text-sm" style={{ fontWeight: 700 }}>Plan za dalje</h3>
             </div>
             <div className="space-y-2">
-              {reminders
-                .filter((r) => r.type === "vaccine")
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+              {[...reminders]
+                .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
                 .map((r) => (
                   <div
-                    key={`sched-${r.petId}`}
+                    key={`plan-${r.petId}-${r.type}`}
                     className="flex items-center gap-3 py-2 px-1"
                     style={{ borderBottom: "1px solid var(--border)" }}
                   >
                     <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={28} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm" style={{ fontWeight: 600 }}>{r.petName}</p>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                        {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                      </p>
                     </div>
-                    <span className={`badge ${r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"}`}>
+                    <span
+                      className={`badge ${
+                        r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"
+                      }`}
+                    >
                       {r.severity !== "ok" && <span className="pulse-dot" />}
-                      {formatDateShort(r.date)}
-                    </span>
-                  </div>
-                ))}
-
-              {reminders
-                .filter((r) => r.type === "control")
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .map((r) => (
-                  <div
-                    key={`ctrl-${r.petId}`}
-                    className="flex items-center gap-3 py-2 px-1"
-                    style={{ borderBottom: "1px solid var(--border)" }}
-                  >
-                    <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={28} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm" style={{ fontWeight: 600 }}>{r.petName}</p>
-                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Kontrolni pregled</p>
-                    </div>
-                    <span className={`badge ${r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"}`}>
-                      {r.severity !== "ok" && <span className="pulse-dot" />}
-                      <Stethoscope size={10} strokeWidth={2.5} />
-                      {formatDateShort(r.date)}
+                      {r.type === "vaccine"
+                        ? <Syringe size={10} strokeWidth={2.5} />
+                        : <Stethoscope size={10} strokeWidth={2.5} />
+                      }
+                      {formatDateNumeric(r.date)}
                     </span>
                   </div>
                 ))}
@@ -612,7 +607,7 @@ export default function OwnerHomePage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm" style={{ fontWeight: 600 }}>{a.service_name}</p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {a.pet_name} · {formatDateTime(a.scheduled_at)}
+                      {a.pet_name} · {formatDateTimeNumericBelgrade(a.scheduled_at)}
                     </p>
                   </div>
                   <span className={`badge shrink-0 ${statusCfg.cls}`}>{statusCfg.label}</span>
@@ -676,7 +671,7 @@ export default function OwnerHomePage() {
             >
               <p style={{ fontWeight: 600 }}>{cancelTarget.service_name}</p>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {cancelTarget.pet_name} · {formatDateTime(cancelTarget.scheduled_at)}
+                {cancelTarget.pet_name} · {formatDateTimeNumericBelgrade(cancelTarget.scheduled_at)}
               </p>
             </div>
           )}

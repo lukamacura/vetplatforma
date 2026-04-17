@@ -2,6 +2,7 @@
 
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import type { Pet } from "@/lib/types"
+import { formatDateNumeric, parseCalendarDate, calendarDaysFromToday } from "@/lib/dates"
 
 // ─── Species config ────────────────────────────────────────────────────────────
 
@@ -35,18 +36,18 @@ type Status = "overdue" | "soon" | "ok" | "none"
 
 function getStatus(dateStr: string | null | undefined): Status {
   if (!dateStr) return "none"
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
+  const d = parseCalendarDate(dateStr)
+  if (!d) return "none"
+  const days = calendarDaysFromToday(d)
   if (days < 0) return "overdue"
   if (days <= 14) return "soon"
   return "ok"
 }
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("sr-Latn-RS", { day: "numeric", month: "short", year: "numeric" })
-}
-
 function daysText(dateStr: string): string {
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86_400_000)
+  const d = parseCalendarDate(dateStr)
+  if (!d) return "—"
+  const days = calendarDaysFromToday(d)
   if (days < 0) return `${Math.abs(days)}d kasni`
   if (days === 0) return "Danas"
   if (days === 1) return "Sutra"
@@ -157,7 +158,7 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
           <InfoPill
             dot="var(--text-muted)"
             label="Poslednja poseta"
-            value={fmtDate(lastVisitDate)}
+            value={formatDateNumeric(lastVisitDate)}
           />
         )}
         {/* Next appointment */}
@@ -165,7 +166,7 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
           <InfoPill
             dot="var(--brand)"
             label="Sledeći termin"
-            value={fmtDate(nextApptDate)}
+            value={formatDateNumeric(nextApptDate)}
           />
         )}
       </div>
@@ -178,7 +179,7 @@ export function PetCard({ pet, variant, ownerName, ownerPhone, onClick, classNam
           display: "flex", flexDirection: "column", gap: 6,
         }}>
           {pet.birth_date && (
-            <SmallRow label="Rođen/a" value={fmtDate(pet.birth_date)} />
+            <SmallRow label="Rođen/a" value={formatDateNumeric(pet.birth_date)} />
           )}
           {pet.chip_id && (
             <SmallRow label="Čip" value={pet.chip_id} mono />

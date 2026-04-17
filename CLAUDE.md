@@ -61,7 +61,7 @@ Key relationships:
 - Each clinic has one vet owner (`clinics.owner_id`).
 - `connections` is the join table linking an owner to a clinic (inserted when owner clicks the `/join/:slug` invite link).
 - Vets access owner data only through the `connections` table — enforced by RLS.
-- `pets.vet_notes` is **never** exposed to owners (RLS + deliberate omission in queries).
+- `pets.vet_notes` is the **shared** general pet note (owners edit it under “Napomena za veterinara”; vets on the patient profile). Per-appointment `appointments.vet_notes` remains vet-only for owners.
 
 ### RLS rules to keep in mind
 

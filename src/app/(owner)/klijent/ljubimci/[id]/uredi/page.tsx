@@ -39,7 +39,8 @@ export default function EditPetPage() {
   const [birthDate,      setBirthDate]      = useState("")
   const [color,          setColor]          = useState("")
   const [weightKg,       setWeightKg]       = useState("")
-  const [ownerNotes,     setOwnerNotes]     = useState("")
+  /** Shared with vet dashboard (`pets.vet_notes`); legacy `owner_notes` is merged on load only. */
+  const [petNotes,       setPetNotes]       = useState("")
   const [photoUrl,       setPhotoUrl]       = useState<string | null>(null)
   const [photoFile,      setPhotoFile]      = useState<File | null>(null)
   const [photoPreview,   setPhotoPreview]   = useState<string | null>(null)
@@ -57,14 +58,14 @@ export default function EditPetPage() {
 
       const { data } = await supabase
         .from("pets")
-        .select("id, name, species, breed, gender, chip_id, passport_number, birth_date, color, weight_kg, photo_url, owner_notes")
+        .select("id, name, species, breed, gender, chip_id, passport_number, birth_date, color, weight_kg, photo_url, vet_notes, owner_notes")
         .eq("id", petId)
         .eq("owner_id", user.id)
         .single()
 
       if (!data) { router.push("/klijent/ljubimci"); return }
 
-      const pet = data as Pick<Pet, "id" | "name" | "species" | "breed" | "gender" | "chip_id" | "passport_number" | "birth_date" | "color" | "weight_kg" | "photo_url" | "owner_notes">
+      const pet = data as Pick<Pet, "id" | "name" | "species" | "breed" | "gender" | "chip_id" | "passport_number" | "birth_date" | "color" | "weight_kg" | "photo_url" | "vet_notes" | "owner_notes">
       setName(pet.name)
       setSpecies(pet.species)
       setBreed(pet.breed ?? "")
@@ -74,7 +75,7 @@ export default function EditPetPage() {
       setBirthDate(pet.birth_date ?? "")
       setColor(pet.color ?? "")
       setWeightKg(pet.weight_kg !== null ? String(pet.weight_kg) : "")
-      setOwnerNotes(pet.owner_notes ?? "")
+      setPetNotes((pet.vet_notes ?? pet.owner_notes) ?? "")
       setPhotoUrl(pet.photo_url ?? null)
       setLoading(false)
     }
@@ -141,7 +142,8 @@ export default function EditPetPage() {
         birth_date:      birthDate || null,
         color:           color.trim() || null,
         weight_kg:       weightKg ? parseFloat(weightKg) : null,
-        owner_notes:     ownerNotes.trim() || null,
+        vet_notes:       petNotes.trim() || null,
+        owner_notes:     null,
         photo_url:       finalPhotoUrl,
       })
       .eq("id", petId)
@@ -398,25 +400,25 @@ export default function EditPetPage() {
               </div>
             </div>
 
-            {/* Napomena za veterinara */}
+            {/* Ista beleška kao na kartici pacijenta u dashboardu (pets.vet_notes) */}
             <div className="space-y-1.5">
-              <Label htmlFor="ownerNotes">Napomena za veterinara</Label>
+              <Label htmlFor="petNotes">Napomena za veterinara</Label>
               <textarea
-                id="ownerNotes"
+                id="petNotes"
                 className="w-full min-h-[100px] rounded-xl text-sm resize-y px-3 py-2"
                 style={{
-                  background: "var(--yellow-tint, #FEF9C3)",
+                  background: "var(--surface-raised)",
                   color: "var(--text-primary)",
-                  border: "1px solid rgba(234,179,8,0.2)",
+                  border: "1px solid var(--border)",
                   lineHeight: 1.6,
                   fontFamily: "inherit",
                 }}
                 placeholder="npr. alergije, hronična stanja, navike u ponašanju..."
-                value={ownerNotes}
-                onChange={(e) => setOwnerNotes(e.target.value)}
+                value={petNotes}
+                onChange={(e) => setPetNotes(e.target.value)}
               />
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Ova napomena je uvek vidljiva Vašem veterinaru.
+                Ista napomena koju vidi i menja veterinar na profilu ljubimca.
               </p>
             </div>
           </div>

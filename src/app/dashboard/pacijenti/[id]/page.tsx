@@ -11,10 +11,8 @@ import {
   CheckCircle,
   Pencil,
   X,
-  MessageSquareText,
   FileText,
   ChevronDown,
-  Lock,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
@@ -226,7 +224,7 @@ export default function PetProfilePage() {
       setWeightKg(p.weight_kg?.toString() ?? "")
       setNextVaccineDate(p.next_vaccine_date ?? "")
       setNextControlDate(p.next_control_date ?? "")
-      setVetNotes(p.vet_notes ?? "")
+      setVetNotes((p.vet_notes ?? p.owner_notes) ?? "")
       setVaccineNote(p.vaccine_note ?? "")
 
       const { data: ownerData } = await supabase.from("profiles").select("*").eq("id", p.owner_id).single()
@@ -300,6 +298,7 @@ export default function PetProfilePage() {
         next_vaccine_date: nextVaccineDate || null,
         next_control_date: nextControlDate || null,
         vet_notes: vetNotes || null,
+        owner_notes: null,
         vaccine_note: vaccineNote.trim() || null,
       })
       .eq("id", pet.id)
@@ -322,6 +321,7 @@ export default function PetProfilePage() {
         next_vaccine_date: nextVaccineDate || null,
         next_control_date: nextControlDate || null,
         vet_notes: vetNotes || null,
+        owner_notes: null,
         vaccine_note: vaccineNote.trim() || null,
       }
       setPet(updated)
@@ -544,37 +544,13 @@ export default function PetProfilePage() {
             ))}
           </dl>
 
-          {pet.owner_notes && (
-            <div
-              className="rounded-xl px-4 py-3 mt-5"
-              style={{
-                background: "var(--yellow-tint, #FEF9C3)",
-                border: "1px solid rgba(234,179,8,0.2)",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-1.5">
-                <MessageSquareText size={13} strokeWidth={2} style={{ color: "var(--yellow, #EAB308)" }} />
-                <span className="text-xs" style={{ fontWeight: 700, color: "var(--text-secondary)" }}>
-                  Vlasnik kaže:
-                </span>
-              </div>
-              <p className="text-sm" style={{ color: "var(--text-primary)", lineHeight: 1.6 }}>
-                {pet.owner_notes}
-              </p>
-            </div>
-          )}
-
           <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span
                 className="text-[10px] uppercase tracking-wider"
                 style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}
               >
-                Beleške
-              </span>
-              <span className="badge badge-muted" style={{ gap: 4 }}>
-                <Lock size={10} strokeWidth={2} />
-                Samo vet
+                Beleške o ljubimcu
               </span>
             </div>
             <textarea

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search, CheckCircle2, Building2 } from "lucide-react"
+import { Search, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ export default function KlinikePage() {
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState("")
-  const [connecting, setConnecting] = useState<string | null>(null)
+  const [busyClinicId, setBusyClinicId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
 
@@ -37,13 +37,34 @@ export default function KlinikePage() {
 
   async function handleConnect(clinicId: string) {
     if (!userId) return
-    setConnecting(clinicId)
+    setBusyClinicId(clinicId)
     const supabase = createClient()
-    await supabase
+    const { error } = await supabase
       .from("connections")
       .upsert({ owner_id: userId, clinic_id: clinicId }, { onConflict: "owner_id,clinic_id" })
-    setConnectedIds((prev) => new Set([...prev, clinicId]))
-    setConnecting(null)
+    if (!error) {
+      setConnectedIds((prev) => new Set([...prev, clinicId]))
+    }
+    setBusyClinicId(null)
+  }
+
+  async function handleDisconnect(clinicId: string) {
+    if (!userId) return
+    setBusyClinicId(clinicId)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("connections")
+      .delete()
+      .eq("owner_id", userId)
+      .eq("clinic_id", clinicId)
+    if (!error) {
+      setConnectedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(clinicId)
+        return next
+      })
+    }
+    setBusyClinicId(null)
   }
 
   const filtered = clinics.filter((c) =>
@@ -89,25 +110,32 @@ export default function KlinikePage() {
                 key={clinic.id}
                 className="bg-white rounded-xl border p-4 flex items-center gap-4"
               >
-                <div className="flex-none w-10 h-10 rounded-full bg-[#2BB5A0]/10 flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-[#2BB5A0]" />
+                <div className="flex-none w-10 h-10 rounded-full bg-[var(--brand-tint)] flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-[var(--brand)]" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{clinic.name}</p>
                 </div>
                 {isConnected ? (
-                  <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-medium">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Povezano
-                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => handleDisconnect(clinic.id)}
+                    disabled={busyClinicId === clinic.id}
+                  >
+                    {busyClinicId === clinic.id ? "..." : "Prekini vezu"}
+                  </Button>
                 ) : (
                   <Button
+                    type="button"
                     size="sm"
                     onClick={() => handleConnect(clinic.id)}
-                    disabled={connecting === clinic.id}
-                    className="bg-[#2BB5A0] hover:bg-[#239684] text-white"
+                    disabled={busyClinicId === clinic.id}
+                    className="btn-primary"
                   >
-                    {connecting === clinic.id ? "..." : "Poveži se"}
+                    {busyClinicId === clinic.id ? "..." : "Poveži se"}
                   </Button>
                 )}
               </div>
