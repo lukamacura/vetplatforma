@@ -79,6 +79,13 @@ export interface Appointment {
   created_at:   string
 }
 
+export interface OwnerDayNote {
+  owner_id:   string
+  day:        string   // YYYY-MM-DD (Postgres date)
+  note:       string
+  updated_at: string
+}
+
 export interface ClinicHours {
   id:         string
   clinic_id:  string
