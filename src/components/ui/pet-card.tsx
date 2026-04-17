@@ -2,22 +2,8 @@
 
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import type { Pet } from "@/lib/types"
+import { SPECIES_LABEL, SPECIES_STYLE } from "@/lib/species"
 import { formatDateNumeric, parseCalendarDate, calendarDaysFromToday } from "@/lib/dates"
-
-// ─── Species config ────────────────────────────────────────────────────────────
-
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
-}
-const SPECIES_LABEL: Record<string, string> = {
-  dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
-}
-const SPECIES_STYLE: Record<string, { bg: string; border: string }> = {
-  dog:   { bg: "var(--blue-tint)",  border: "rgba(37,99,235,0.18)"  },
-  cat:   { bg: "var(--amber-tint)", border: "rgba(217,119,6,0.18)"  },
-  bird:  { bg: "var(--green-tint)", border: "rgba(22,163,74,0.18)"  },
-  other: { bg: "var(--brand-tint)", border: "rgba(43,181,160,0.18)" },
-}
 
 // ─── Types & helpers ───────────────────────────────────────────────────────────
 

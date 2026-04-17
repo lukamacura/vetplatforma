@@ -20,14 +20,9 @@ import { Input } from "@/components/ui/input"
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
-import type { Pet, Profile, Species, Gender } from "@/lib/types"
+import { SPECIES_LABEL } from "@/lib/species"
+import type { Pet, Profile, Gender } from "@/lib/types"
 
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
-}
-const SPECIES_LABEL: Record<Species, string> = {
-  dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
-}
 const GENDER_LABEL: Record<Gender, string> = {
   male: "M", female: "Ž", unknown: "",
 }

@@ -9,20 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
+import { SPECIES_OPTIONS, SPECIES_IMAGE } from "@/lib/species"
+import { GENDER_OPTIONS, BREED_PLACEHOLDER, COLOR_PLACEHOLDER, buildPetPayload } from "@/lib/pet-form"
 import type { Species, Gender, Pet } from "@/lib/types"
-
-const SPECIES_OPTIONS: { value: Species; label: string; emoji: string }[] = [
-  { value: "dog",   label: "Pas",    emoji: "🐕" },
-  { value: "cat",   label: "Mačka",  emoji: "🐈" },
-  { value: "bird",  label: "Ptica",  emoji: "🐦" },
-  { value: "other", label: "Ostalo", emoji: "🐾" },
-]
-
-const GENDER_OPTIONS: { value: Gender; label: string }[] = [
-  { value: "male",    label: "Muški"    },
-  { value: "female",  label: "Ženski"   },
-  { value: "unknown", label: "Nepoznat" },
-]
 
 export default function EditPetPage() {
   const router = useRouter()
@@ -133,18 +122,13 @@ export default function EditPetPage() {
     const { error: updateError } = await supabase
       .from("pets")
       .update({
-        name:            name.trim(),
-        species,
-        breed:           breed.trim() || null,
-        gender,
-        chip_id:         chipId.trim() || null,
-        passport_number: passportNumber.trim() || null,
-        birth_date:      birthDate || null,
-        color:           color.trim() || null,
-        weight_kg:       weightKg ? parseFloat(weightKg) : null,
-        vet_notes:       petNotes.trim() || null,
-        owner_notes:     null,
-        photo_url:       finalPhotoUrl,
+        ...buildPetPayload({
+          name, species, breed, gender,
+          chipId, passportNumber, birthDate, color, weightKg,
+          petNotes,
+        }),
+        owner_notes: null,
+        photo_url:   finalPhotoUrl,
       })
       .eq("id", petId)
       .eq("owner_id", user.id)
@@ -162,7 +146,7 @@ export default function EditPetPage() {
     setTimeout(() => setSaved(false), 3000)
   }
 
-  const currentEmoji = SPECIES_OPTIONS.find((o) => o.value === species)?.emoji ?? "🐾"
+  const currentSpeciesImage = SPECIES_IMAGE[species] ?? SPECIES_IMAGE.other
   const displayPhoto = photoPreview ?? photoUrl
 
   if (loading) {
@@ -229,15 +213,21 @@ export default function EditPetPage() {
             </div>
           ) : (
             <div
-              className="flex items-center justify-center select-none"
+              className="relative flex items-center justify-center select-none overflow-hidden"
               style={{
                 width: 100, height: 100, borderRadius: "50%",
                 background: "var(--surface-raised)",
                 border: "3px dashed var(--border-strong)",
-                fontSize: 44, lineHeight: 1,
               }}
             >
-              {currentEmoji}
+              <Image
+                src={currentSpeciesImage}
+                alt=""
+                fill
+                sizes="100px"
+                className="object-contain"
+                style={{ padding: 10 }}
+              />
             </div>
           )}
         </div>
@@ -299,7 +289,14 @@ export default function EditPetPage() {
                       transform:   species === opt.value ? "scale(1.02)" : "scale(1)",
                     }}
                   >
-                    <span className="text-lg">{opt.emoji}</span>
+                    <Image
+                      src={opt.image}
+                      alt=""
+                      width={36}
+                      height={36}
+                      className="object-contain"
+                      style={{ height: 36, width: 36 }}
+                    />
                     <span className="text-[11px]">{opt.label}</span>
                   </button>
                 ))}
@@ -311,7 +308,7 @@ export default function EditPetPage() {
               <Label htmlFor="breed" className="text-xs" style={{ fontWeight: 600 }}>Rasa</Label>
               <Input
                 id="breed"
-                placeholder="npr. Zlatni Retriver"
+                placeholder={BREED_PLACEHOLDER[species]}
                 value={breed}
                 onChange={(e) => setBreed(e.target.value)}
               />
@@ -357,7 +354,7 @@ export default function EditPetPage() {
                 <Label htmlFor="color" className="text-xs" style={{ fontWeight: 600 }}>Boja</Label>
                 <Input
                   id="color"
-                  placeholder="npr. Zlatna"
+                  placeholder={COLOR_PLACEHOLDER[species]}
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                 />

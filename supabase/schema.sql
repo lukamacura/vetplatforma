@@ -57,7 +57,9 @@ create table if not exists pets (
   id                uuid primary key default gen_random_uuid(),
   owner_id          uuid references profiles not null,
   name              text not null,
-  species           text not null check (species in ('dog','cat','bird','other')),
+  species           text not null check (species in (
+    'dog','cat','rabbit','bird','rodent','reptile','ferret','other'
+  )),
   breed             text,
   birth_date        date,
   weight_kg         numeric(5,2),       -- Critical Three #1

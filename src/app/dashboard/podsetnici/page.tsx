@@ -9,10 +9,6 @@ import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import type { Pet, Profile } from "@/lib/types"
 
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
-}
-
 type ReminderItem = {
   pet: Pet
   ownerName: string

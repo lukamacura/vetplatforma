@@ -7,6 +7,7 @@ import Link from "next/link"
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
+import { SPECIES_LABEL } from "@/lib/species"
 import type { AppointmentWithDetails } from "@/lib/types"
 
 function formatTime(iso: string) {
@@ -30,13 +31,6 @@ function getMonthGrid(year: number, month: number): (Date | null)[] {
   for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(year, month, d))
   for (let i = 0; i < endPad; i++) cells.push(null)
   return cells
-}
-
-const SPECIES_LABEL: Record<string, string> = {
-  dog: "Pas", cat: "Mačka", bird: "Ptica", other: "Ostalo",
-}
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
 }
 
 /* ── Stat card ── */

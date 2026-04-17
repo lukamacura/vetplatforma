@@ -110,8 +110,8 @@ export default function KlinikePage() {
                 key={clinic.id}
                 className="bg-white rounded-xl border p-4 flex items-center gap-4"
               >
-                <div className="flex-none w-10 h-10 rounded-full bg-[var(--brand-tint)] flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-[var(--brand)]" />
+                <div className="flex-none w-10 h-10 rounded-full bg-accent flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-(--brand)" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{clinic.name}</p>

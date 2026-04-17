@@ -20,6 +20,7 @@ import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import { cn } from "@/lib/utils"
+import { SPECIES_LABEL, SPECIES_OPTIONS } from "@/lib/species"
 import type { Pet, Profile, AppointmentStatus, Species, Gender } from "@/lib/types"
 
 type ApptHistoryRow = {
@@ -30,24 +31,12 @@ type ApptHistoryRow = {
   vet_notes: string | null
 }
 
-const SPECIES_LABEL: Record<Species, string> = {
-  dog: "Pas",
-  cat: "Mačka",
-  bird: "Ptica",
-  other: "Ostalo",
-}
 const GENDER_LABEL: Record<Gender, string> = {
   male: "Muški",
   female: "Ženski",
   unknown: "Nepoznat",
 }
 
-const SPECIES_OPTIONS: { value: Species; label: string }[] = [
-  { value: "dog", label: "Pas" },
-  { value: "cat", label: "Mačka" },
-  { value: "bird", label: "Ptica" },
-  { value: "other", label: "Ostalo" },
-]
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "male", label: "Muški" },
   { value: "female", label: "Ženski" },

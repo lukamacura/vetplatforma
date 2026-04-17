@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
-  PawPrint, CalendarDays, X, History, Syringe, Stethoscope,
+  PawPrint, CalendarDays, History, Syringe, Stethoscope,
   Clock, ChevronRight, Sparkles, AlertTriangle, ChevronDown,
+  NotebookIcon,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { PetCard } from "@/components/ui/pet-card"
 import { PetAvatar } from "@/components/ui/pet-avatar"
@@ -81,12 +82,12 @@ type Reminder = {
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OwnerHomePage() {
+  const router = useRouter()
   const [pets, setPets] = useState<Pet[]>([])
   const [appointments, setAppointments] = useState<AppointmentRow[]>([])
   const [pastAppts, setPastAppts] = useState<AppointmentRow[]>([])
   const [ownerName, setOwnerName] = useState("")
   const [loading, setLoading] = useState(true)
-  const [selectedPet, setSelectedPet] = useState<Pet | null>(null)
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
@@ -530,7 +531,7 @@ export default function OwnerHomePage() {
                 key={pet.id}
                 pet={pet}
                 variant="owner"
-                onClick={() => setSelectedPet(pet)}
+                onClick={() => router.push(`/klijent/ljubimci/${pet.id}/uredi`)}
                 lastVisitDate={lastVisitMap[pet.id]}
                 nextApptDate={nextApptMap[pet.id]}
               />
@@ -545,7 +546,7 @@ export default function OwnerHomePage() {
           <div className="solid-card rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <div className="icon-sm icon-amber shrink-0">
-                <Syringe size={13} strokeWidth={2.25} />
+                <NotebookIcon size={13} strokeWidth={2.25} />
               </div>
               <h3 className="text-sm" style={{ fontWeight: 700 }}>Plan za dalje</h3>
             </div>
@@ -617,43 +618,6 @@ export default function OwnerHomePage() {
           </div>
         </div>
       )}
-
-      {/* ── Pet detail dialog ── */}
-      <Dialog open={!!selectedPet} onOpenChange={(open) => !open && setSelectedPet(null)}>
-        <DialogContent className="max-w-sm p-0 overflow-hidden gap-0">
-          <DialogHeader className="sr-only">
-            <DialogTitle>{selectedPet?.name ?? "Karton ljubimca"}</DialogTitle>
-          </DialogHeader>
-
-          {selectedPet && (
-            <>
-              <PetCard
-                pet={selectedPet}
-                variant="owner"
-                className="rounded-none border-0 shadow-none"
-                lastVisitDate={lastVisitMap[selectedPet.id]}
-                nextApptDate={nextApptMap[selectedPet.id]}
-              />
-
-              <div
-                className="px-4 py-3 flex gap-2"
-                style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}
-              >
-                <Link href={`/klijent/zakazivanje?petId=${selectedPet.id}`} className="flex-1">
-                  <button className="btn-primary w-full text-sm py-2.5">
-                    Zakaži termin
-                  </button>
-                </Link>
-                <DialogClose asChild>
-                  <Button variant="outline" size="icon" className="shrink-0">
-                    <X size={16} strokeWidth={2} />
-                  </Button>
-                </DialogClose>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* ── Cancel confirmation dialog ── */}
       <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>

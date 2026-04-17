@@ -1,5 +1,7 @@
+import type { Species } from './species'
+export type { Species }
+
 export type Role               = 'vet' | 'owner'
-export type Species            = 'dog' | 'cat' | 'bird' | 'other'
 export type Gender             = 'male' | 'female' | 'unknown'
 export type AppointmentStatus  = 'confirmed' | 'cancelled' | 'no_show'
 export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled'

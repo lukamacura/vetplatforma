@@ -1,11 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import type { Species } from "@/lib/types"
-
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: "🐕", cat: "🐈", bird: "🐦", other: "🐾",
-}
+import { SPECIES_IMAGE, type Species } from "@/lib/species"
 
 export interface PetAvatarProps {
   photoUrl?: string | null
@@ -29,8 +25,7 @@ export function PetAvatar({
   const borderRadius =
     rounded === "full" ? "50%" : rounded === "2xl" ? 16 : 12
 
-  const emoji = SPECIES_EMOJI[species] ?? "🐾"
-  const fontSize = size >= 56 ? size * 0.5 : size >= 40 ? size * 0.45 : size * 0.4
+  const speciesImage = SPECIES_IMAGE[species as Species] ?? SPECIES_IMAGE.other
 
   if (photoUrl) {
     return (
@@ -71,15 +66,21 @@ export function PetAvatar({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize,
-        lineHeight: 1,
+        position: "relative",
+        overflow: "hidden",
         boxShadow: "0 2px 10px rgba(0,0,0,0.06), inset 0 -1px 3px rgba(0,0,0,0.04)",
         userSelect: "none",
         outline,
         outlineOffset,
       }}
     >
-      {emoji}
+      <Image
+        src={speciesImage}
+        alt=""
+        fill
+        sizes={`${size}px`}
+        className="object-contain"
+      />
     </div>
   )
 }
