@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, CalendarPlus } from "lucide-react"
+import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, CalendarPlus, Banknote } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
 import { PetAvatar } from "@/components/ui/pet-avatar"
@@ -39,11 +39,15 @@ function StatCard({
   label,
   value,
   iconClass,
+  sublineStat,
+  hint,
 }: {
   icon: React.ElementType
   label: string
   value: number | string
   iconClass: string
+  sublineStat?: string
+  hint?: string
 }) {
   return (
     <motion.div
@@ -62,6 +66,16 @@ function StatCard({
       <p className="text-3xl tracking-tight leading-none" style={{ color: "var(--text-primary)", fontWeight: 800 }}>
         {value}
       </p>
+      {sublineStat && (
+        <p className="text-xs mt-2" style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+          {sublineStat}
+        </p>
+      )}
+      {hint && (
+        <p className="text-[11px] mt-1.5 leading-snug" style={{ color: "var(--text-muted)", opacity: 0.8 }}>
+          {hint}
+        </p>
+      )}
     </motion.div>
   )
 }
@@ -184,6 +198,9 @@ export default function DashboardPage() {
   const [viewMonth,       setViewMonth]       = useState(() => new Date().getMonth())
   const [appointments,    setAppointments]    = useState<AppointmentWithDetails[]>([])
   const [monthDotCounts,  setMonthDotCounts]  = useState<Record<string, number>>({})
+  const [monthlyRevenue,        setMonthlyRevenue]        = useState<number | null>(null)
+  const [monthlyApptCount,      setMonthlyApptCount]      = useState(0)
+  const [monthlyCancelledCount, setMonthlyCancelledCount] = useState(0)
   const [connectedCount,  setConnectedCount]  = useState(0)
   const [clinicName,      setClinicName]      = useState("")
   const [clinicId,        setClinicId]        = useState<string | null>(null)
@@ -317,6 +334,57 @@ export default function DashboardPage() {
     loadMonthCounts()
   }, [clinicId, viewYear, viewMonth])
 
+  // Load planned revenue for the viewed month: sum services.price_rsd
+  // over non-cancelled / non-no-show appointments.
+  useEffect(() => {
+    if (!clinicId) return
+    async function loadMonthlyRevenue() {
+      const supabase = createClient()
+      const monthStart = new Date(viewYear, viewMonth, 1)
+      const monthEnd   = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999)
+
+      const { data: apptRows } = await supabase
+        .from("appointments").select("service_id, status")
+        .eq("clinic_id", clinicId)
+        .gte("scheduled_at", monthStart.toISOString())
+        .lte("scheduled_at", monthEnd.toISOString())
+
+      if (!apptRows?.length) {
+        setMonthlyRevenue(0)
+        setMonthlyApptCount(0)
+        setMonthlyCancelledCount(0)
+        return
+      }
+
+      const serviceIds = [...new Set(apptRows.map((a) => a.service_id))]
+      const { data: svcRows } = await supabase
+        .from("services").select("id, price_rsd")
+        .in("id", serviceIds)
+
+      const priceMap: Record<string, number> = Object.fromEntries(
+        (svcRows ?? []).map((s) => [s.id, s.price_rsd ?? 0])
+      )
+
+      let revenue = 0
+      let confirmed = 0
+      let cancelled = 0
+      for (const row of apptRows) {
+        if (row.status === "cancelled") {
+          cancelled += 1
+          continue
+        }
+        if (row.status === "no_show") continue
+        revenue += priceMap[row.service_id] ?? 0
+        confirmed += 1
+      }
+
+      setMonthlyRevenue(revenue)
+      setMonthlyApptCount(confirmed)
+      setMonthlyCancelledCount(cancelled)
+    }
+    loadMonthlyRevenue()
+  }, [clinicId, viewYear, viewMonth])
+
   const monthGrid = getMonthGrid(viewYear, viewMonth)
 
   const selectedDateLabel = isToday
@@ -326,6 +394,20 @@ export default function DashboardPage() {
   const statLabel = isToday
     ? "Zakazivanja danas"
     : `Zakazivanja — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
+
+  const now = new Date()
+  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth()
+  const viewedMonthName = new Date(viewYear, viewMonth).toLocaleDateString("sr-Latn-RS", { month: "long" })
+  const revenueLabel = isCurrentMonth
+    ? "Planirani prihod ovog meseca"
+    : `Planirani prihod — ${viewedMonthName}`
+  const revenueValue = monthlyRevenue === null
+    ? "—"
+    : `${monthlyRevenue.toLocaleString("sr-Latn-RS")} RSD`
+  const revenueSubline = monthlyRevenue === null
+    ? undefined
+    : `${monthlyApptCount} ${monthlyApptCount === 1 ? "termin zakazan" : "termina zakazano"}` +
+      (monthlyCancelledCount > 0 ? ` · ${monthlyCancelledCount} otkazano` : "")
 
   return (
     <motion.div
@@ -361,8 +443,8 @@ export default function DashboardPage() {
       {/* Bento grid: Calendar + Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
 
-      {/* Mini month calendar — spans 2 rows on desktop */}
-      <motion.div variants={stagger.item} className="lg:col-span-2 lg:row-span-2 solid-card rounded-2xl p-4">
+      {/* Mini month calendar — spans 3 rows on desktop to match 3 stat cards */}
+      <motion.div variants={stagger.item} className="lg:col-span-2 lg:row-span-3 solid-card rounded-2xl p-4">
 
         {/* Month header */}
         <div className="flex items-center justify-between mb-3">
@@ -508,6 +590,14 @@ export default function DashboardPage() {
           label="Povezani klijenti"
           value={loading ? "—" : connectedCount}
           iconClass="icon-brand"
+        />
+        <StatCard
+          icon={Banknote}
+          label={revenueLabel}
+          value={revenueValue}
+          iconClass="icon-green"
+          sublineStat={revenueSubline}
+          hint="Ne uračunava otkaze i doplate."
         />
 
       </div>
