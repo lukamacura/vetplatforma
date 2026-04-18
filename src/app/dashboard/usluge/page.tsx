@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, CheckCircle2, Circle, Scissors, Clock, Timer } from "lucide-react"
+import { Plus, CheckCircle2, Circle, Scissors, Clock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
-import { suggestBuffer } from "@/lib/scheduling"
 import type { Service } from "@/lib/types"
 
 function formatPrice(price: number): string {
@@ -65,20 +64,13 @@ function ServiceRow({ service, onToggle, onClick }: {
         </div>
       </div>
 
-      {/* Meta row — duration / buffer / toggle. Wraps on mobile, inline on desktop */}
+      {/* Meta row — duration / toggle. Wraps on mobile, inline on desktop */}
       <div className="mt-3 sm:mt-2.5 flex items-center justify-between gap-2 pl-[40px]">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <span className="badge badge-blue" style={{ gap: 4 }}>
             <Clock size={10} strokeWidth={2.5} />
             {service.duration_minutes} min
           </span>
-
-          {service.buffer_after_minutes > 0 && (
-            <span className="badge badge-muted" style={{ gap: 4 }}>
-              <Timer size={10} strokeWidth={2.5} />
-              +{service.buffer_after_minutes}m
-            </span>
-          )}
         </div>
 
         <motion.button
@@ -118,14 +110,12 @@ export default function ServicesPage() {
   const [formDuration,    setFormDuration]    = useState(30)
   const [formDescription, setFormDescription] = useState("")
   const [formPrice,       setFormPrice]       = useState("")
-  const [formBuffer,      setFormBuffer]      = useState(5)
 
   function resetForm() {
     setFormName("")
     setFormDuration(30)
     setFormDescription("")
     setFormPrice("")
-    setFormBuffer(suggestBuffer(30))
     setEditingService(null)
   }
 
@@ -140,7 +130,6 @@ export default function ServicesPage() {
     setFormDuration(service.duration_minutes)
     setFormDescription(service.description ?? "")
     setFormPrice(service.price_rsd.toString())
-    setFormBuffer(service.buffer_after_minutes)
     setIsDialogOpen(true)
   }
 
@@ -181,11 +170,10 @@ export default function ServicesPage() {
     const supabase = createClient()
 
     const payload = {
-      name:                 formName.trim(),
-      duration_minutes:     formDuration,
-      description:          formDescription.trim() || null,
-      price_rsd:            parsedPrice,
-      buffer_after_minutes: formBuffer,
+      name:             formName.trim(),
+      duration_minutes: formDuration,
+      description:      formDescription.trim() || null,
+      price_rsd:        parsedPrice,
     }
 
     if (editingService) {
@@ -311,7 +299,6 @@ export default function ServicesPage() {
                     onChange={(e) => {
                       const dur = Math.max(5, parseInt(e.target.value, 10) || 5)
                       setFormDuration(dur)
-                      if (!editingService) setFormBuffer(suggestBuffer(dur))
                     }}
                     className="flex-1"
                   />
@@ -340,29 +327,8 @@ export default function ServicesPage() {
               </div>
             </div>
             <p className="text-xs -mt-2" style={{ color: "var(--text-muted)" }}>
-              Trajanje od 5 do 480 minuta. Izmene važe samo za nove termine — već zakazani termini zadržavaju trajanje sa trenutka rezervacije.
+              Trajanje od 5 do 480 minuta. Pauza između termina se podešava globalno u Podešavanjima. Izmene važe samo za nove termine.
             </p>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="svc-buffer">Pauza nakon usluge</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="svc-buffer"
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={60}
-                  step={5}
-                  value={Number.isFinite(formBuffer) ? formBuffer : ""}
-                  onChange={(e) => setFormBuffer(Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)))}
-                  className="flex-1"
-                />
-                <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>min</span>
-              </div>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Vreme za čišćenje/pripremu. Preporučeno: {suggestBuffer(formDuration)} min
-              </p>
-            </div>
 
             <div className="grid gap-1.5">
               <Label htmlFor="svc-desc">Opis <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opcionalno)</span></Label>

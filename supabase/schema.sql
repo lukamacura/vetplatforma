@@ -10,11 +10,14 @@ create extension if not exists "pgcrypto";
 -- 1. Clinics
 -- ------------------------------------------------------------
 create table if not exists clinics (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,
-  slug       text unique not null,   -- used in /join/[slug]
-  owner_id   uuid references auth.users not null,
-  created_at timestamptz default now()
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  slug           text unique not null,   -- used in /join/[slug]
+  owner_id       uuid references auth.users not null,
+  -- One global pauza (0/5/10/15 min) glued to the end of every appointment.
+  -- Applied at booking time; already-booked rows keep their stored windows.
+  buffer_minutes int not null default 10 check (buffer_minutes in (0, 5, 10, 15)),
+  created_at     timestamptz default now()
 );
 
 -- ------------------------------------------------------------
@@ -96,6 +99,13 @@ create table if not exists services (
 
 -- ------------------------------------------------------------
 -- 6. Appointments (no pending status — always confirmed)
+--    ends_at is snapshot at insert time via a trigger:
+--       ends_at = scheduled_at
+--               + service.duration_minutes * interval '1 minute'
+--               + clinic.buffer_minutes    * interval '1 minute'
+--    so changing the clinic buffer later never shifts existing rows.
+--    See migration 20260418_clinic_buffer_minutes.sql + the EXCLUDE
+--    no-overlap constraint in 20260418_appointments_no_overlap.sql.
 -- ------------------------------------------------------------
 create table if not exists appointments (
   id           uuid primary key default gen_random_uuid(),
@@ -104,6 +114,7 @@ create table if not exists appointments (
   service_id   uuid references services not null,
   owner_id     uuid references profiles not null,
   scheduled_at timestamptz not null,
+  ends_at      timestamptz not null,
   status       text default 'confirmed',
   vet_notes    text,               -- vet-only per-appointment notes; NEVER exposed to owner
   created_at   timestamptz default now()

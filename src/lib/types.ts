@@ -12,6 +12,8 @@ export interface Clinic {
   slug:                                string
   owner_id:                            string
   created_at:                          string
+  // Global pauza between appointments (0 / 5 / 10 / 15 min, default 10).
+  buffer_minutes:                      number
   trial_started_at:                    string | null
   subscription_status:                 SubscriptionStatus
   subscription_current_period_end:     string | null
@@ -63,7 +65,6 @@ export interface Service {
   duration_minutes:     number
   description:          string | null
   price_rsd:            number
-  buffer_after_minutes: number
   is_active:            boolean
   created_at:           string
 }
@@ -75,6 +76,10 @@ export interface Appointment {
   service_id:   string
   owner_id:     string
   scheduled_at: string
+  // Computed by the DB at insert time
+  //   = scheduled_at + service.duration_minutes + clinic.buffer_minutes.
+  // Never mutated after insert.
+  ends_at:      string
   status:       AppointmentStatus
   booked_by:    'owner' | 'vet'
   vet_notes:    string | null

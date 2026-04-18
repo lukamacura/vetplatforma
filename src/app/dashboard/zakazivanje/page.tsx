@@ -2,14 +2,14 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight, Banknote, Sparkles, AlertTriangle, Search, PawPrint } from "lucide-react"
+import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight, Banknote, Search, PawPrint } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
 import {
-  generateOptimizedSlots,
+  generateFreeSlots,
+  intervalsFromAppointments,
   formatSlot,
   toLocalDateStr,
-  type RankedSlot,
 } from "@/lib/scheduling"
 import { belgradeDayBoundsUTC, belgradeWeekday } from "@/lib/time"
 import type { Pet, Service, ClinicHours } from "@/lib/types"
@@ -56,10 +56,11 @@ function VetBookingPageInner() {
   const preselectedPetId   = searchParams.get("petId")
   const preselectedOwnerId = searchParams.get("ownerId")
 
-  const [clinicId,   setClinicId]   = useState<string | null>(null)
-  const [step,       setStep]       = useState<Step>(1)
-  const [loading,    setLoading]    = useState(true)
-  const [saving,     setSaving]     = useState(false)
+  const [clinicId,      setClinicId]      = useState<string | null>(null)
+  const [clinicBuffer,  setClinicBuffer]  = useState<number>(10)
+  const [step,          setStep]          = useState<Step>(1)
+  const [loading,       setLoading]       = useState(true)
+  const [saving,        setSaving]        = useState(false)
 
   const [rows,          setRows]          = useState<OwnerPetRow[]>([])
   const [query,         setQuery]         = useState("")
@@ -71,11 +72,10 @@ function VetBookingPageInner() {
   const [clinicHoursMap,  setClinicHoursMap]  = useState<Map<number, ClinicHours>>(new Map())
   const [weekStart,       setWeekStart]       = useState<Date>(() => startOfWeek(new Date()))
   const [selectedDate,    setSelectedDate]    = useState<Date | null>(null)
-  const [rankedSlots,     setRankedSlots]     = useState<RankedSlot[]>([])
+  const [freeSlots,       setFreeSlots]       = useState<string[]>([])
   const [selectedSlot,    setSelectedSlot]    = useState("")
   const [loadingSlots,    setLoadingSlots]    = useState(false)
   const [errorMsg,        setErrorMsg]        = useState("")
-  const [showAllSlots,    setShowAllSlots]    = useState(false)
 
   // Initial load — owners + their pets folded into a single searchable list.
   useEffect(() => {
@@ -88,8 +88,12 @@ function VetBookingPageInner() {
       const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, buffer_minutes").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
+        if (owned?.buffer_minutes != null) setClinicBuffer(owned.buffer_minutes)
+      } else {
+        const { data: clinic } = await supabase.from("clinics").select("buffer_minutes").eq("id", cid).single()
+        if (clinic?.buffer_minutes != null) setClinicBuffer(clinic.buffer_minutes)
       }
       if (!cid) { setLoading(false); return }
       setClinicId(cid)
@@ -152,62 +156,42 @@ function VetBookingPageInner() {
   const loadSlots = useCallback(async () => {
     if (!selectedDate || !selectedService || !clinicId) return
     setLoadingSlots(true)
-    setShowAllSlots(false)
     const supabase = createClient()
     const dayStr   = toLocalDateStr(selectedDate)
     const [startISO, endISO] = belgradeDayBoundsUTC(dayStr)
 
+    // `ends_at` is snapshot at insert time by the DB trigger —
+    // it already includes the clinic buffer that applied at booking time.
     const { data: apptData } = await supabase
       .from("appointments")
-      .select("scheduled_at, duration_minutes, buffer_after_minutes, service_id")
+      .select("scheduled_at, ends_at")
       .eq("clinic_id", clinicId)
       .eq("status", "confirmed")
       .gte("scheduled_at", startISO)
       .lt("scheduled_at", endISO)
 
-    const appts = apptData ?? []
-    const legacyIds = appts.filter((a) => a.duration_minutes == null).map((a) => a.service_id)
-    let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
-    if (legacyIds.length > 0) {
-      const { data: legacy } = await supabase
-        .from("services")
-        .select("id, duration_minutes, buffer_after_minutes")
-        .in("id", [...new Set(legacyIds)])
-      serviceMap = Object.fromEntries(
-        (legacy ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
-          s.id, { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
-        ])
-      )
-    }
-
-    const intervals = appts.map((a) => {
-      const start = new Date(a.scheduled_at).getTime()
-      const dur   = a.duration_minutes ?? serviceMap[a.service_id]?.duration_minutes     ?? 30
-      const buf   = a.buffer_after_minutes ?? serviceMap[a.service_id]?.buffer_after_minutes ?? 0
-      return { start, end: start + (dur + buf) * 60_000 }
-    })
+    const intervals = intervalsFromAppointments(
+      (apptData ?? []) as { scheduled_at: string; ends_at: string }[],
+    )
 
     const weekday   = belgradeWeekday(dayStr)
     const hours     = clinicHoursMap.get(weekday)
     const openTime  = hours?.open_time  ?? "09:00"
     const closeTime = hours?.close_time ?? "17:00"
 
-    const ranked = generateOptimizedSlots(
-      {
-        date:        dayStr,
-        durationMin: selectedService.duration_minutes,
-        intervals,
-        openTime,
-        closeTime,
-        // Vets can book walk-ins right now; no lead-time guard, just skip past slots.
-        notBefore:   new Date(),
-      },
-      "advisory",
-      selectedService.duration_minutes,
-    )
-    setRankedSlots(ranked)
+    const slots = generateFreeSlots({
+      date:        dayStr,
+      durationMin: selectedService.duration_minutes,
+      bufferMin:   clinicBuffer,
+      intervals,
+      openTime,
+      closeTime,
+      // Vets can book walk-ins right now; no lead-time guard, just skip past slots.
+      notBefore:   new Date(),
+    })
+    setFreeSlots(slots)
     setLoadingSlots(false)
-  }, [selectedDate, selectedService, clinicId, clinicHoursMap])
+  }, [selectedDate, selectedService, clinicId, clinicBuffer, clinicHoursMap])
 
   useEffect(() => { loadSlots() }, [loadSlots])
 
@@ -228,7 +212,7 @@ function VetBookingPageInner() {
     setSaving(false)
     if (!error) { setStep(4); return }
     if (error.code === "23P01") {
-      setErrorMsg("Termin je upravo zauzet. Odaberite drugi.")
+      setErrorMsg("Taj termin je upravo rezervisan. Molimo odaberite drugi.")
       setSelectedSlot("")
       await loadSlots()
       return
@@ -442,7 +426,7 @@ function VetBookingPageInner() {
         </motion.div>
       )}
 
-      {/* Step 3 — Select date + slot */}
+      {/* Step 3 — Select date + slot (chronological list, no packing hints) */}
       {step === 3 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-5">
           <div className="mb-2">
@@ -503,129 +487,57 @@ function VetBookingPageInner() {
           </div>
 
           {/* Slots */}
-          {selectedDate && (() => {
-            const hasRecommended = rankedSlots.some((s) => s.rank.isContiguous)
-            const hasNonRecommended = rankedSlots.some((s) => !s.rank.isContiguous)
-            const visibleSlots = showAllSlots ? rankedSlots : rankedSlots.filter((s) => s.rank.isContiguous)
-            const displaySlots = visibleSlots.length > 0 ? visibleSlots : rankedSlots
-
-            return (
-              <motion.div
-                key={selectedDate.toISOString()}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-                className="solid-card rounded-2xl p-5"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="icon-sm icon-blue">
-                      <CalendarDays size={14} strokeWidth={2} />
-                    </div>
-                    <p className="text-sm" style={{ fontWeight: 600 }}>
-                      {selectedDate.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "long" })}
-                    </p>
-                  </div>
-                  {hasRecommended && hasNonRecommended && (
-                    <button
-                      onClick={() => setShowAllSlots((v) => !v)}
-                      className="text-xs px-2.5 py-1 rounded-lg transition-all"
-                      style={{
-                        color: showAllSlots ? "var(--text-muted)" : "var(--brand)",
-                        background: showAllSlots ? "var(--surface-raised)" : "var(--brand-tint)",
-                        border: `1px solid ${showAllSlots ? "var(--border)" : "rgba(43,181,160,0.25)"}`,
-                        fontWeight: 600,
-                      }}
-                    >
-                      {showAllSlots ? "Samo preporučeni" : "Prikaži sve termine"}
-                    </button>
-                  )}
+          {selectedDate && (
+            <motion.div
+              key={selectedDate.toISOString()}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="solid-card rounded-2xl p-5"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="icon-sm icon-blue">
+                  <CalendarDays size={14} strokeWidth={2} />
                 </div>
-                {loadingSlots ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    {[...Array(8)].map((_, i) => (
-                      <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
-                    ))}
-                  </div>
-                ) : rankedSlots.length === 0 ? (
-                  <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
-                    Nema slobodnih termina za ovaj dan.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-4 gap-2">
-                      {displaySlots.map((slot) => {
-                        const isSelected = selectedSlot === slot.iso
-                        const isRecommended = slot.rank.isContiguous
-                        return (
-                          <button
-                            key={slot.iso}
-                            onClick={() => setSelectedSlot(slot.iso)}
-                            className="relative py-2.5 rounded-xl text-sm font-medium transition-all"
-                            style={{
-                              background: isSelected
-                                ? "var(--brand)"
-                                : isRecommended
-                                  ? "var(--brand-tint)"
-                                  : "var(--surface-raised)",
-                              color: isSelected
-                                ? "#fff"
-                                : isRecommended
-                                  ? "var(--brand)"
-                                  : "var(--text-secondary)",
-                              border: `1px solid ${
-                                isSelected
-                                  ? "var(--brand)"
-                                  : isRecommended
-                                    ? "rgba(43,181,160,0.25)"
-                                    : "var(--border)"
-                              }`,
-                              fontWeight: isSelected || isRecommended ? 700 : 500,
-                              opacity: !isRecommended && !isSelected ? 0.75 : 1,
-                            }}
-                            title={
-                              isRecommended
-                                ? "Preporučeno — bez praznine"
-                                : `Ostavlja prazninu od ${slot.rank.gapMinutes} min`
-                            }
-                          >
-                            {formatSlot(slot.iso)}
-                            {isRecommended && !isSelected && (
-                              <span
-                                className="absolute -top-1.5 -right-1.5 flex items-center justify-center rounded-full"
-                                style={{
-                                  width: 16,
-                                  height: 16,
-                                  background: "var(--green)",
-                                  color: "#fff",
-                                }}
-                              >
-                                <Sparkles size={8} strokeWidth={2.5} />
-                              </span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {selectedSlot && !rankedSlots.find((s) => s.iso === selectedSlot)?.rank.isContiguous && (
-                      <div
-                        className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+                <p className="text-sm" style={{ fontWeight: 600 }}>
+                  {selectedDate.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "long" })}
+                </p>
+              </div>
+              {loadingSlots ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+                  ))}
+                </div>
+              ) : freeSlots.length === 0 ? (
+                <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>
+                  Nema slobodnih termina za ovaj dan.
+                </p>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {freeSlots.map((iso) => {
+                    const isSelected = selectedSlot === iso
+                    return (
+                      <button
+                        key={iso}
+                        onClick={() => setSelectedSlot(iso)}
+                        className="py-2.5 rounded-xl text-sm transition-all"
                         style={{
-                          background: "var(--amber-tint)",
-                          color: "var(--amber-text)",
-                          border: "1px solid rgba(217,119,6,0.18)",
-                          fontWeight: 600,
+                          background: isSelected ? "var(--brand)" : "var(--surface-raised)",
+                          color:      isSelected ? "#fff"         : "var(--text-secondary)",
+                          border:     `1px solid ${isSelected ? "var(--brand)" : "var(--border)"}`,
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor:     "pointer",
                         }}
                       >
-                        <AlertTriangle size={12} strokeWidth={2.5} />
-                        Ostavlja prazninu od {rankedSlots.find((s) => s.iso === selectedSlot)?.rank.gapMinutes ?? 0} min u rasporedu
-                      </div>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            )
-          })()}
+                        {formatSlot(iso)}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          )}
 
           {errorMsg && (
             <motion.div

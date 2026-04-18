@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback, useTransition } from "react"
-import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2, Timer } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -59,6 +59,7 @@ export default function PodesavanjaPage() {
   const [clinicName,          setClinicName]          = useState("")
   const [phone,               setPhone]               = useState("")
   const [hours,               setHours]               = useState<HoursRow[]>(DEFAULT_HOURS)
+  const [bufferMinutes,       setBufferMinutes]       = useState<number>(10)
   const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
   const [planExpiry,          setPlanExpiry]          = useState<string | null>(null)
   const [hasCardOnFile,       setHasCardOnFile]       = useState(false)
@@ -67,6 +68,9 @@ export default function PodesavanjaPage() {
   type SaveStatus = "idle" | "saving" | "saved"
   const [clinicStatus, setClinicStatus] = useState<SaveStatus>("idle")
   const [phoneStatus,  setPhoneStatus]  = useState<SaveStatus>("idle")
+  const [bufferStatus, setBufferStatus] = useState<SaveStatus>("idle")
+  const [bufferError,  setBufferError]  = useState<string | null>(null)
+  const bufferSavedRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [savingHours,  setSavingHours]  = useState(false)
   const [copied,       setCopied]       = useState(false)
   const [loading,      setLoading]      = useState(true)
@@ -105,9 +109,10 @@ export default function PodesavanjaPage() {
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id, phone").eq("id", user.id).single()
 
-      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null; subscription_cancel_at_period_end: boolean | null }) {
+      function applyClinic(c: { name: string; slug: string; buffer_minutes: number | null; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null; subscription_cancel_at_period_end: boolean | null }) {
         setClinicName(c.name)
         setClinicSlug(c.slug)
+        setBufferMinutes(c.buffer_minutes ?? 10)
         let status = c.subscription_status ?? "trial"
         // Treat trial past 30 days as expired even before middleware persists it.
         if (status === "trial" && c.trial_started_at) {
@@ -134,11 +139,11 @@ export default function PodesavanjaPage() {
 
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
         if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("id", cid).single()
+        const { data: clinic } = await supabase.from("clinics").select("name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("id", cid).single()
         if (clinic) applyClinic(clinic)
       }
       setPhone(profile?.phone ?? "")
@@ -173,6 +178,7 @@ export default function PodesavanjaPage() {
       if (clinicSavedRef.current)    clearTimeout(clinicSavedRef.current)
       if (phoneDebounceRef.current)  clearTimeout(phoneDebounceRef.current)
       if (phoneSavedRef.current)     clearTimeout(phoneSavedRef.current)
+      if (bufferSavedRef.current)    clearTimeout(bufferSavedRef.current)
     }
   }, [])
 
@@ -201,6 +207,35 @@ export default function PodesavanjaPage() {
     if (phoneSavedRef.current) clearTimeout(phoneSavedRef.current)
     phoneSavedRef.current = setTimeout(() => setPhoneStatus("idle"), 1800)
   }, [])
+
+  const handleBufferChange = useCallback(async (value: number) => {
+    const previous = bufferMinutes
+    setBufferMinutes(value)
+    setBufferError(null)
+    if (!loadedRef.current || !clinicId) return
+    setBufferStatus("saving")
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("clinics")
+      .update({ buffer_minutes: value })
+      .eq("id", clinicId)
+    if (error) {
+      // Most likely the DB rejected because stretching the buffer would
+      // overlap two future appointments (appointments_no_overlap EXCLUDE).
+      setBufferMinutes(previous)
+      setBufferStatus("idle")
+      const isOverlap = error.code === "23P01" || /overlap/i.test(error.message)
+      setBufferError(
+        isOverlap
+          ? "Pauza ne može da se poveća jer bi se postojeći termini preklopili. Prvo pomeri ili otkaži konfliktne termine."
+          : "Greška pri čuvanju pauze. Pokušaj ponovo.",
+      )
+      return
+    }
+    setBufferStatus("saved")
+    if (bufferSavedRef.current) clearTimeout(bufferSavedRef.current)
+    bufferSavedRef.current = setTimeout(() => setBufferStatus("idle"), 1800)
+  }, [clinicId, bufferMinutes])
 
   const handleClinicNameChange = useCallback((value: string) => {
     setClinicName(value)
@@ -480,6 +515,66 @@ export default function PodesavanjaPage() {
             )}
           </div>
         </div>
+      </motion.div>
+
+      {/* ── Buffer between appointments — one global value ── */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="icon-md icon-amber">
+              <Timer size={16} strokeWidth={2} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm" style={{ fontWeight: 700 }}>Pauza između termina</h2>
+                <SaveIndicator status={bufferStatus} />
+              </div>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Dodaje se iza svakog termina — za čišćenje, dezinfekciju ili pripremu sledećeg pacijenta. Promena se odmah odražava i na buduće već zakazane termine.
+              </p>
+            </div>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Pauza između termina u minutima"
+            className="flex items-center gap-1.5 rounded-xl p-1 shrink-0"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+          >
+            {[0, 5, 10, 15].map((val) => {
+              const selected = bufferMinutes === val
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => handleBufferChange(val)}
+                  className="rounded-lg px-3 py-2 text-sm transition-all"
+                  style={{
+                    background: selected ? "var(--brand)" : "transparent",
+                    color:      selected ? "#fff"         : "var(--text-secondary)",
+                    fontWeight: selected ? 700 : 500,
+                    minWidth:   56,
+                    cursor:     "pointer",
+                  }}
+                >
+                  {val === 0 ? "Bez" : `${val} min`}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {bufferError && (
+          <p
+            className="text-xs mt-3"
+            style={{ color: "var(--danger, #b91c1c)" }}
+            role="alert"
+          >
+            {bufferError}
+          </p>
+        )}
       </motion.div>
 
       {/* ── Working hours — full width, grid layout ── */}

@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import {
-  generateOptimizedSlots,
+  generateFreeSlots,
+  intervalsFromAppointments,
   getAvailableDays,
   formatSlot,
 } from "@/lib/scheduling"
@@ -110,58 +111,35 @@ function BookingPageInner() {
     const supabase = createClient()
     const [startISO, endISO] = belgradeDayBoundsUTC(selectedDay)
 
+    // `ends_at` is snapshot by the DB trigger at booking time and already
+    // includes the clinic buffer that applied then — so we can use it as-is.
     const { data: apptData } = await supabase
       .from("appointments")
-      .select("scheduled_at, duration_minutes, buffer_after_minutes, service_id")
+      .select("scheduled_at, ends_at")
       .eq("clinic_id", selectedClinic.id)
       .eq("status", "confirmed")
       .gte("scheduled_at", startISO)
       .lt("scheduled_at", endISO)
 
-    const appts = apptData ?? []
-
-    // Prefer snapshot columns on the appointment row; fall back to services
-    // lookup only for legacy rows pre-migration.
-    const legacyIds = appts
-      .filter((a) => a.duration_minutes == null)
-      .map((a) => a.service_id)
-    let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
-    if (legacyIds.length > 0) {
-      const { data: legacy } = await supabase
-        .from("services")
-        .select("id, duration_minutes, buffer_after_minutes")
-        .in("id", [...new Set(legacyIds)])
-      serviceMap = Object.fromEntries(
-        (legacy ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
-          s.id, { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
-        ])
-      )
-    }
-
-    const intervals = appts.map((a) => {
-      const start = new Date(a.scheduled_at).getTime()
-      const dur   = a.duration_minutes ?? serviceMap[a.service_id]?.duration_minutes     ?? 30
-      const buf   = a.buffer_after_minutes ?? serviceMap[a.service_id]?.buffer_after_minutes ?? 0
-      return { start, end: start + (dur + buf) * 60_000 }
-    })
+    const intervals = intervalsFromAppointments(
+      (apptData ?? []) as { scheduled_at: string; ends_at: string }[],
+    )
 
     const weekday   = belgradeWeekday(selectedDay)
     const hours     = clinicHoursMap.get(weekday)
     const openTime  = hours?.open_time  ?? "09:00"
     const closeTime = hours?.close_time ?? "17:00"
 
-    const ranked = generateOptimizedSlots(
-      {
-        date:        selectedDay,
-        durationMin: selectedService.duration_minutes,
-        intervals,
-        openTime,
-        closeTime,
-        notBefore:   new Date(Date.now() + OWNER_MIN_LEAD_MS),
-      },
-      "strict",
-    )
-    setAvailableSlots(ranked.map((r) => r.iso))
+    const slots = generateFreeSlots({
+      date:        selectedDay,
+      durationMin: selectedService.duration_minutes,
+      bufferMin:   selectedClinic.buffer_minutes ?? 10,
+      intervals,
+      openTime,
+      closeTime,
+      notBefore:   new Date(Date.now() + OWNER_MIN_LEAD_MS),
+    })
+    setAvailableSlots(slots)
   }, [selectedDay, selectedService, selectedClinic, clinicHoursMap])
 
   useEffect(() => { loadSlots() }, [loadSlots])
