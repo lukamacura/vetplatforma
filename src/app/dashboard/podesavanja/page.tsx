@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useTransition } from "react"
-import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2 } from "lucide-react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,6 +43,7 @@ export default function PodesavanjaPage() {
   const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
   const [planExpiry,          setPlanExpiry]          = useState<string | null>(null)
   const [hasCardOnFile,       setHasCardOnFile]       = useState(false)
+  const [cancelAtPeriodEnd,   setCancelAtPeriodEnd]   = useState(false)
 
   const [savingClinic, setSavingClinic] = useState(false)
   const [savingPhone,  setSavingPhone]  = useState(false)
@@ -77,7 +78,7 @@ export default function PodesavanjaPage() {
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id, phone").eq("id", user.id).single()
 
-      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null }) {
+      function applyClinic(c: { name: string; slug: string; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null; subscription_cancel_at_period_end: boolean | null }) {
         setClinicName(c.name)
         setClinicSlug(c.slug)
         let status = c.subscription_status ?? "trial"
@@ -88,6 +89,7 @@ export default function PodesavanjaPage() {
           if (exp.getTime() < Date.now()) status = "expired"
         }
         setSubscriptionStatus(status)
+        setCancelAtPeriodEnd(!!c.subscription_cancel_at_period_end)
 
         // Card on file = Stripe subscription exists (webhook set period_end).
         // Distinguishes "trial, no card" from "trial, card entered via Checkout".
@@ -105,11 +107,11 @@ export default function PodesavanjaPage() {
 
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
         if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id").eq("id", cid).single()
+        const { data: clinic } = await supabase.from("clinics").select("name, slug, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("id", cid).single()
         if (clinic) applyClinic(clinic)
       }
       setPhone(profile?.phone ?? "")
@@ -196,6 +198,8 @@ export default function PodesavanjaPage() {
   const isActive = subscriptionStatus === "active"
   const hasCard  = hasCardOnFile
   const isExpired = subscriptionStatus === "expired" || subscriptionStatus === "cancelled"
+  // Cancellation scheduled in Stripe but period hasn't ended yet — vet still has access.
+  const isPendingCancel = cancelAtPeriodEnd && !isExpired
 
   return (
     <motion.div
@@ -223,24 +227,47 @@ export default function PodesavanjaPage() {
       <motion.div variants={stagger.item}
         className="rounded-2xl p-6"
         style={{
-          background: isActive || hasCard
-            ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.02) 100%)"
-            : isExpired
-              ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.02) 100%)"
-              : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.02) 100%)",
-          border: `1px solid ${isActive || hasCard ? "rgba(22,163,74,0.18)" : isExpired ? "rgba(220,38,38,0.18)" : "rgba(43,181,160,0.22)"}`,
+          background: isPendingCancel
+            ? "linear-gradient(135deg, rgba(217,119,6,0.10) 0%, rgba(217,119,6,0.02) 100%)"
+            : isActive || hasCard
+              ? "linear-gradient(135deg, rgba(22,163,74,0.08) 0%, rgba(22,163,74,0.02) 100%)"
+              : isExpired
+                ? "linear-gradient(135deg, rgba(220,38,38,0.08) 0%, rgba(220,38,38,0.02) 100%)"
+                : "linear-gradient(135deg, rgba(43,181,160,0.10) 0%, rgba(43,181,160,0.02) 100%)",
+          border: `1px solid ${
+            isPendingCancel ? "rgba(217,119,6,0.22)"
+              : isActive || hasCard ? "rgba(22,163,74,0.18)"
+              : isExpired ? "rgba(220,38,38,0.18)"
+              : "rgba(43,181,160,0.22)"
+          }`,
         }}
       >
         <div className="flex items-center justify-between gap-6 flex-wrap">
           <div className="flex items-start gap-4">
-            <div className={`icon-lg shrink-0 ${isActive || hasCard ? "icon-green" : isExpired ? "icon-red" : "icon-brand"}`}>
-              <CreditCard size={22} strokeWidth={1.75} />
-            </div>
+            {isPendingCancel ? (
+              <div
+                className="icon-lg shrink-0"
+                style={{ background: "rgba(217,119,6,0.12)", color: "rgb(217,119,6)" }}
+              >
+                <AlertTriangle size={22} strokeWidth={1.75} />
+              </div>
+            ) : (
+              <div className={`icon-lg shrink-0 ${isActive || hasCard ? "icon-green" : isExpired ? "icon-red" : "icon-brand"}`}>
+                <CreditCard size={22} strokeWidth={1.75} />
+              </div>
+            )}
             <div>
               <p className="text-xs uppercase tracking-wider mb-1" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
                 VetPlatforma Pro · €49/mesec
               </p>
-              {subscriptionStatus === "active" ? (
+              {isPendingCancel ? (
+                <>
+                  <span className="text-lg" style={{ fontWeight: 700, color: "rgb(217,119,6)" }}>Pretplata prekinuta</span>
+                  {planExpiry && (
+                    <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Imate pristup do {planExpiry}.</p>
+                  )}
+                </>
+              ) : subscriptionStatus === "active" ? (
                 <>
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 size={15} strokeWidth={2.5} style={{ color: "var(--green)" }} />

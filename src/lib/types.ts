@@ -7,14 +7,16 @@ export type AppointmentStatus  = 'confirmed' | 'cancelled' | 'no_show'
 export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'cancelled'
 
 export interface Clinic {
-  id:                  string
-  name:                string
-  slug:                string
-  owner_id:            string
-  created_at:          string
-  trial_started_at:    string | null
-  subscription_status: SubscriptionStatus
-  stripe_customer_id:  string | null
+  id:                                  string
+  name:                                string
+  slug:                                string
+  owner_id:                            string
+  created_at:                          string
+  trial_started_at:                    string | null
+  subscription_status:                 SubscriptionStatus
+  subscription_current_period_end:     string | null
+  subscription_cancel_at_period_end:   boolean
+  stripe_customer_id:                  string | null
 }
 
 export interface Profile {

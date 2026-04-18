@@ -39,8 +39,9 @@ async function syncSubscription(stripe: Stripe, supabase: ReturnType<typeof getS
   await supabase
     .from("clinics")
     .update({
-      subscription_status:             status,
-      subscription_current_period_end: periodEnd,
+      subscription_status:                status,
+      subscription_current_period_end:    periodEnd,
+      subscription_cancel_at_period_end:  sub.cancel_at_period_end ?? false,
     })
     .eq("stripe_customer_id", customerId)
 }
@@ -81,8 +82,9 @@ export async function POST(req: NextRequest) {
       await supabase
         .from("clinics")
         .update({
-          subscription_status:             "cancelled",
-          subscription_current_period_end: null,
+          subscription_status:                "cancelled",
+          subscription_current_period_end:    null,
+          subscription_cancel_at_period_end:  false,
         })
         .eq("stripe_customer_id", customerId)
       break
