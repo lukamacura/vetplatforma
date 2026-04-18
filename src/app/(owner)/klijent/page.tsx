@@ -248,7 +248,7 @@ export default function OwnerHomePage() {
                 : "1px solid rgba(217,119,6,0.18)",
             }}
           >
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-start gap-2 mb-3">
               <div
                 className="icon-sm shrink-0"
                 style={{
@@ -261,11 +261,16 @@ export default function OwnerHomePage() {
               >
                 <AlertTriangle size={14} strokeWidth={2.25} />
               </div>
-              <h2 className="text-sm" style={{ fontWeight: 700 }}>
-                {urgentReminders.some((r) => r.severity === "overdue")
-                  ? "Potrebna pažnja"
-                  : "Uskoro ističe"}
-              </h2>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm" style={{ fontWeight: 700 }}>
+                  {urgentReminders.some((r) => r.severity === "overdue")
+                    ? "Potrebna pažnja"
+                    : "Uskoro ističe"}
+                </h2>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  Vakcinacije i pregledi koji uskoro ističu — još nisu zakazani.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -309,14 +314,19 @@ export default function OwnerHomePage() {
       <motion.div variants={stagger.item} className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="icon-sm icon-brand">
+            <div className="icon-sm icon-blue">
               <CalendarDays size={13} strokeWidth={2.25} />
             </div>
-            <h2 className="text-sm" style={{ fontWeight: 700 }}>Predstojeći termini</h2>
+            <div>
+              <h2 className="text-sm" style={{ fontWeight: 700 }}>Zakazani termini</h2>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Termini koje ste zakazali kod veterinara.
+              </p>
+            </div>
           </div>
           <Link
             href="/klijent/zakazivanje"
-            className="flex items-center gap-1 text-xs"
+            className="flex items-center gap-1 text-xs shrink-0"
             style={{ color: "var(--brand)", fontWeight: 600 }}
           >
             Zakaži novi
@@ -364,8 +374,8 @@ export default function OwnerHomePage() {
                   variants={stagger.row}
                   className="solid-card rounded-2xl p-3.5 flex items-center gap-3"
                   style={isToday ? {
-                    background: "var(--brand-tint)",
-                    borderColor: "rgba(43,181,160,0.22)",
+                    background: "var(--blue-tint)",
+                    borderColor: "rgba(37,99,235,0.2)",
                   } : undefined}
                 >
                   <div className="flex flex-col items-center shrink-0" style={{ minWidth: 44 }}>
@@ -373,7 +383,7 @@ export default function OwnerHomePage() {
                       className="text-[10px] uppercase"
                       style={{
                         fontWeight: 700, letterSpacing: "0.06em",
-                        color: isToday ? "var(--brand)" : isTomorrow ? "var(--amber)" : "var(--text-muted)",
+                        color: isToday ? "var(--blue)" : isTomorrow ? "var(--amber)" : "var(--text-muted)",
                       }}
                     >
                       {dayLabel}
@@ -385,7 +395,7 @@ export default function OwnerHomePage() {
 
                   <div
                     className="w-px self-stretch shrink-0"
-                    style={{ background: isToday ? "rgba(43,181,160,0.25)" : "var(--border)" }}
+                    style={{ background: isToday ? "rgba(37,99,235,0.25)" : "var(--border)" }}
                   />
 
                   <div className="flex-1 min-w-0">
@@ -398,9 +408,9 @@ export default function OwnerHomePage() {
                           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px]"
                           style={{
                             fontWeight: 600,
-                            background: "var(--blue-tint)",
-                            color: "var(--blue)",
-                            border: "1px solid rgba(37,99,235,0.15)",
+                            background: "var(--brand-tint)",
+                            color: "var(--brand)",
+                            border: "1px solid rgba(43,181,160,0.2)",
                           }}
                         >
                           <Stethoscope size={9} strokeWidth={2.5} />
@@ -542,45 +552,58 @@ export default function OwnerHomePage() {
 
       {/* ── Plan za dalje (vakcine + kontrolni pregledi) ── */}
       {reminders.length > 0 && (
-        <motion.div variants={stagger.item}>
-          <div className="solid-card rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="icon-sm icon-amber shrink-0">
-                <NotebookIcon size={13} strokeWidth={2.25} />
-              </div>
-              <h3 className="text-sm" style={{ fontWeight: 700 }}>Plan za dalje</h3>
+        <motion.div variants={stagger.item} className="space-y-3">
+          <div className="flex items-start gap-2">
+            <div className="icon-sm icon-amber shrink-0">
+              <NotebookIcon size={13} strokeWidth={2.25} />
             </div>
-            <div className="space-y-2">
-              {[...reminders]
-                .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
-                .map((r) => (
-                  <div
-                    key={`plan-${r.petId}-${r.type}`}
-                    className="flex items-center gap-3 py-2 px-1"
-                    style={{ borderBottom: "1px solid var(--border)" }}
-                  >
-                    <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={28} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm" style={{ fontWeight: 600 }}>{r.petName}</p>
-                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                        {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
-                      </p>
-                    </div>
-                    <span
-                      className={`badge ${
-                        r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"
-                      }`}
-                    >
-                      {r.severity !== "ok" && <span className="pulse-dot" />}
-                      {r.type === "vaccine"
-                        ? <Syringe size={10} strokeWidth={2.5} />
-                        : <Stethoscope size={10} strokeWidth={2.5} />
-                      }
-                      {formatDateNumeric(r.date)}
-                    </span>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm" style={{ fontWeight: 700 }}>Podsetnici — plan za dalje</h3>
+              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Vakcinacije i kontrolni pregledi — još nisu zakazani termini.
+              </p>
+            </div>
+          </div>
+          <div
+            className="rounded-2xl p-3 space-y-1"
+            style={{
+              background: "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)",
+              border: "1px solid rgba(217,119,6,0.15)",
+            }}
+          >
+            {[...reminders]
+              .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
+              .map((r, i, arr) => (
+                <div
+                  key={`plan-${r.petId}-${r.type}`}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2"
+                  style={{
+                    background: "rgba(255,255,255,0.75)",
+                    backdropFilter: "blur(8px)",
+                    marginBottom: i === arr.length - 1 ? 0 : undefined,
+                  }}
+                >
+                  <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={28} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm" style={{ fontWeight: 600 }}>{r.petName}</p>
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                    </p>
                   </div>
-                ))}
-            </div>
+                  <span
+                    className={`badge ${
+                      r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"
+                    }`}
+                  >
+                    {r.severity !== "ok" && <span className="pulse-dot" />}
+                    {r.type === "vaccine"
+                      ? <Syringe size={10} strokeWidth={2.5} />
+                      : <Stethoscope size={10} strokeWidth={2.5} />
+                    }
+                    {formatDateNumeric(r.date)}
+                  </span>
+                </div>
+              ))}
           </div>
         </motion.div>
       )}

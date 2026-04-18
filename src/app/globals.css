@@ -426,12 +426,12 @@
 }
 
 .appt-row-active {
-  background: var(--brand-tint);
-  border-color: rgba(43, 181, 160, 0.28);
+  background: var(--blue-tint);
+  border-color: rgba(37, 99, 235, 0.28);
 }
 
 .appt-row-active:hover {
-  background: var(--brand-tint);
+  background: var(--blue-tint);
 }
 
 /* No-show button */

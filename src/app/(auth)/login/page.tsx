@@ -1,13 +1,14 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { PawPrint } from "lucide-react"
+import { PawPrint, Building2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
 
 function LoginForm() {
   const router = useRouter()
@@ -17,6 +18,15 @@ function LoginForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [inviteClinicName, setInviteClinicName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!clinicSlug) return
+    const supabase = createClient()
+    fetchClinicBySlug(supabase, clinicSlug).then((clinic) => {
+      if (clinic) setInviteClinicName(clinic.name)
+    })
+  }, [clinicSlug])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -32,7 +42,6 @@ function LoginForm() {
       return
     }
 
-    // Fetch role to redirect correctly
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -44,7 +53,10 @@ function LoginForm() {
 
     const role = profile?.role ?? (user.user_metadata?.role as string | undefined)
 
-    if (clinicSlug) {
+    if (clinicSlug && role === "owner") {
+      await connectOwnerToClinicBySlug(supabase, user.id, clinicSlug)
+      router.push("/klijent")
+    } else if (clinicSlug && role === "vet") {
       router.push(`/join/${clinicSlug}`)
     } else {
       router.push(role === "vet" ? "/dashboard" : "/klijent")
@@ -63,6 +75,21 @@ function LoginForm() {
           <CardDescription>Prijavite se na Vaš nalog</CardDescription>
         </CardHeader>
         <CardContent>
+          {clinicSlug && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#2BB5A0]/20 bg-[#2BB5A0]/5 p-3 text-sm text-[#239684]">
+              <Building2 className="h-4 w-4 mt-0.5 flex-none" />
+              <p>
+                {inviteClinicName ? (
+                  <>
+                    Prijavite se da biste se povezali sa klinikom{" "}
+                    <span className="font-semibold">{inviteClinicName}</span>. Povezaćemo vas automatski.
+                  </>
+                ) : (
+                  <>Prijavite se radi povezivanja sa klinikom. Povezaćemo vas automatski.</>
+                )}
+              </p>
+            </div>
+          )}
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

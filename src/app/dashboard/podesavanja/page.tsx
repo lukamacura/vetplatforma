@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useCallback, useTransition } from "react"
-import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle } from "lucide-react"
+import { useEffect, useRef, useState, useCallback, useTransition } from "react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +34,25 @@ const DEFAULT_HOURS: HoursRow[] = WEEKDAYS.map(({ index }) => ({
   close_time: index === 6 ? "13:00" : "17:00",
 }))
 
+function SaveIndicator({ status }: { status: "idle" | "saving" | "saved" }) {
+  return (
+    <div className="flex items-center gap-1 text-[11px]" style={{ minHeight: 16 }}>
+      {status === "saving" && (
+        <>
+          <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
+          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
+        </>
+      )}
+      {status === "saved" && (
+        <>
+          <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+          <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function PodesavanjaPage() {
   const [clinicId,            setClinicId]            = useState<string | null>(null)
   const [clinicSlug,          setClinicSlug]          = useState("")
@@ -45,16 +64,24 @@ export default function PodesavanjaPage() {
   const [hasCardOnFile,       setHasCardOnFile]       = useState(false)
   const [cancelAtPeriodEnd,   setCancelAtPeriodEnd]   = useState(false)
 
-  const [savingClinic, setSavingClinic] = useState(false)
-  const [savingPhone,  setSavingPhone]  = useState(false)
+  type SaveStatus = "idle" | "saving" | "saved"
+  const [clinicStatus, setClinicStatus] = useState<SaveStatus>("idle")
+  const [phoneStatus,  setPhoneStatus]  = useState<SaveStatus>("idle")
   const [savingHours,  setSavingHours]  = useState(false)
   const [copied,       setCopied]       = useState(false)
   const [loading,      setLoading]      = useState(true)
   const [isPending,    startTransition]  = useTransition()
 
-  const [clinicMsg, setClinicMsg] = useState<string | null>(null)
-  const [phoneMsg,  setPhoneMsg]  = useState<string | null>(null)
   const [hoursMsg,  setHoursMsg]  = useState<string | null>(null)
+
+  // Debounce + "Sačuvano" auto-hide timers for inline auto-save
+  const clinicDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clinicSavedRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const phoneDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const phoneSavedRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Don't save while initial data is still loading into the inputs
+  const loadedRef = useRef(false)
 
   const inviteUrl =
     typeof window !== "undefined" && clinicSlug
@@ -134,32 +161,62 @@ export default function PodesavanjaPage() {
         }
       }
       setLoading(false)
+      loadedRef.current = true
     }
     load()
   }, [])
 
-  async function handleSaveClinic(e: React.FormEvent) {
-    e.preventDefault()
-    if (!clinicId || !clinicName.trim()) return
-    setSavingClinic(true)
-    const supabase = createClient()
-    const { error } = await supabase.from("clinics").update({ name: clinicName.trim() }).eq("id", clinicId)
-    setSavingClinic(false)
-    setClinicMsg(error ? "Greška pri čuvanju." : "Sačuvano!")
-    setTimeout(() => setClinicMsg(null), 2500)
-  }
+  // Flush timers on unmount
+  useEffect(() => {
+    return () => {
+      if (clinicDebounceRef.current) clearTimeout(clinicDebounceRef.current)
+      if (clinicSavedRef.current)    clearTimeout(clinicSavedRef.current)
+      if (phoneDebounceRef.current)  clearTimeout(phoneDebounceRef.current)
+      if (phoneSavedRef.current)     clearTimeout(phoneSavedRef.current)
+    }
+  }, [])
 
-  async function handleSavePhone(e: React.FormEvent) {
-    e.preventDefault()
+  const saveClinicName = useCallback(async (value: string) => {
+    if (!clinicId) return
+    const trimmed = value.trim()
+    if (!trimmed) { setClinicStatus("idle"); return }
+    const supabase = createClient()
+    const { error } = await supabase.from("clinics").update({ name: trimmed }).eq("id", clinicId)
+    if (error) { setClinicStatus("idle"); return }
+    setClinicStatus("saved")
+    if (clinicSavedRef.current) clearTimeout(clinicSavedRef.current)
+    clinicSavedRef.current = setTimeout(() => setClinicStatus("idle"), 1800)
+  }, [clinicId])
+
+  const savePhone = useCallback(async (value: string) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setSavingPhone(true)
-    const { error } = await supabase.from("profiles").update({ phone: phone.trim() || null }).eq("id", user.id)
-    setSavingPhone(false)
-    setPhoneMsg(error ? "Greška pri čuvanju." : "Sačuvano!")
-    setTimeout(() => setPhoneMsg(null), 2500)
-  }
+    if (!user) { setPhoneStatus("idle"); return }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ phone: value.trim() || null })
+      .eq("id", user.id)
+    if (error) { setPhoneStatus("idle"); return }
+    setPhoneStatus("saved")
+    if (phoneSavedRef.current) clearTimeout(phoneSavedRef.current)
+    phoneSavedRef.current = setTimeout(() => setPhoneStatus("idle"), 1800)
+  }, [])
+
+  const handleClinicNameChange = useCallback((value: string) => {
+    setClinicName(value)
+    if (!loadedRef.current) return
+    setClinicStatus("saving")
+    if (clinicDebounceRef.current) clearTimeout(clinicDebounceRef.current)
+    clinicDebounceRef.current = setTimeout(() => { saveClinicName(value) }, 600)
+  }, [saveClinicName])
+
+  const handlePhoneChange = useCallback((value: string) => {
+    setPhone(value)
+    if (!loadedRef.current) return
+    setPhoneStatus("saving")
+    if (phoneDebounceRef.current) clearTimeout(phoneDebounceRef.current)
+    phoneDebounceRef.current = setTimeout(() => { savePhone(value) }, 600)
+  }, [savePhone])
 
   async function handleSaveHours(e: React.FormEvent) {
     e.preventDefault()
@@ -341,66 +398,47 @@ export default function PodesavanjaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Clinic name */}
         <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
-          <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Naziv klinike</h2>
-          <form onSubmit={handleSaveClinic} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="clinic-name">Naziv</Label>
-              <Input
-                id="clinic-name"
-                value={clinicName}
-                onChange={(e) => setClinicName(e.target.value)}
-                placeholder="npr. Veterinarska ordinacija Đorđić"
-                required
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={savingClinic || !clinicName.trim()}
-                className="btn-primary"
-                style={{ opacity: savingClinic || !clinicName.trim() ? 0.6 : 1 }}
-              >
-                {savingClinic ? "Čuvanje..." : "Sačuvaj naziv"}
-              </button>
-              {clinicMsg && (
-                <span className="text-sm" style={{ color: clinicMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
-                  {clinicMsg}
-                </span>
-              )}
-            </div>
-          </form>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="text-sm" style={{ fontWeight: 700 }}>Naziv klinike</h2>
+            <SaveIndicator status={clinicStatus} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="clinic-name">Naziv</Label>
+            <Input
+              id="clinic-name"
+              value={clinicName}
+              onChange={(e) => handleClinicNameChange(e.target.value)}
+              onBlur={() => {
+                if (!loadedRef.current || !clinicId || !clinicName.trim()) return
+                if (clinicDebounceRef.current) clearTimeout(clinicDebounceRef.current)
+                saveClinicName(clinicName)
+              }}
+              placeholder="npr. Veterinarska ordinacija Đorđić"
+            />
+          </div>
         </motion.div>
 
         {/* Phone */}
         <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
-          <h2 className="text-sm mb-4" style={{ fontWeight: 700 }}>Telefon</h2>
-          <form onSubmit={handleSavePhone} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="phone">Broj telefona</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="npr. +381 60 123 4567"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={savingPhone}
-                className="btn-primary"
-                style={{ opacity: savingPhone ? 0.6 : 1 }}
-              >
-                {savingPhone ? "Čuvanje..." : "Sačuvaj telefon"}
-              </button>
-              {phoneMsg && (
-                <span className="text-sm" style={{ color: phoneMsg === "Sačuvano!" ? "var(--green)" : "var(--red)" }}>
-                  {phoneMsg}
-                </span>
-              )}
-            </div>
-          </form>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h2 className="text-sm" style={{ fontWeight: 700 }}>Telefon</h2>
+            <SaveIndicator status={phoneStatus} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="phone">Broj telefona</Label>
+            <Input
+              id="phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              onBlur={() => {
+                if (!loadedRef.current) return
+                if (phoneDebounceRef.current) clearTimeout(phoneDebounceRef.current)
+                savePhone(phone)
+              }}
+              placeholder="npr. +381 60 123 4567"
+            />
+          </div>
         </motion.div>
       </div>
 

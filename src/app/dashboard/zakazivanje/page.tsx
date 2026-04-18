@@ -1,23 +1,23 @@
 "use client"
 
-import { Suspense, useEffect, useState, useCallback } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight, Banknote, Sparkles, AlertTriangle } from "lucide-react"
+import { ArrowLeft, Users, CheckCircle2, CalendarDays, Clock, ChevronLeft, ChevronRight, Banknote, Sparkles, AlertTriangle, Search, PawPrint } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
 import {
-  buildOccupiedIntervals,
   generateOptimizedSlots,
   formatSlot,
   toLocalDateStr,
   type RankedSlot,
 } from "@/lib/scheduling"
+import { belgradeDayBoundsUTC, belgradeWeekday } from "@/lib/time"
 import type { Pet, Service, ClinicHours } from "@/lib/types"
 
-type ConnectedOwner = {
-  id: string
-  full_name: string
-  petCount: number
+type OwnerPetRow = {
+  owner_id:   string
+  owner_name: string
+  pet:        Pet
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -41,7 +41,14 @@ function getWeekDays(weekStart: Date): Date[] {
   })
 }
 
-type Step = 1 | 2 | 3 | 4 | 5
+// Flow: 1 = Vlasnik+Ljubimac, 2 = Usluga, 3 = Datum+Termin, 4 = Uspeh
+type Step = 1 | 2 | 3 | 4
+
+function norm(s: string): string {
+  return s.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d").replace(/Đ/g, "D")
+}
 
 function VetBookingPageInner() {
   const router       = useRouter()
@@ -54,11 +61,9 @@ function VetBookingPageInner() {
   const [loading,    setLoading]    = useState(true)
   const [saving,     setSaving]     = useState(false)
 
-  const [owners,          setOwners]          = useState<ConnectedOwner[]>([])
-  const [selectedOwner,   setSelectedOwner]   = useState<ConnectedOwner | null>(null)
-
-  const [pets,            setPets]            = useState<Pet[]>([])
-  const [selectedPet,     setSelectedPet]     = useState<Pet | null>(null)
+  const [rows,          setRows]          = useState<OwnerPetRow[]>([])
+  const [query,         setQuery]         = useState("")
+  const [selectedRow,   setSelectedRow]   = useState<OwnerPetRow | null>(null)
 
   const [services,        setServices]        = useState<Service[]>([])
   const [selectedService, setSelectedService] = useState<Service | null>(null)
@@ -72,7 +77,7 @@ function VetBookingPageInner() {
   const [errorMsg,        setErrorMsg]        = useState("")
   const [showAllSlots,    setShowAllSlots]    = useState(false)
 
-  // Initial load
+  // Initial load — owners + their pets folded into a single searchable list.
   useEffect(() => {
     async function init() {
       const supabase = createClient()
@@ -89,59 +94,44 @@ function VetBookingPageInner() {
       if (!cid) { setLoading(false); return }
       setClinicId(cid)
 
-      // Load connected owners
+      // Connected owners → pets → flatten
       const { data: conns } = await supabase.from("connections").select("owner_id").eq("clinic_id", cid)
-      if (!conns?.length) { setLoading(false); return }
-      const ownerIds = conns.map((c) => c.owner_id)
+      const ownerIds = (conns ?? []).map((c) => c.owner_id)
 
-      const [{ data: profiles }, { data: petCounts }] = await Promise.all([
-        supabase.from("profiles").select("id, full_name").in("id", ownerIds),
-        supabase.from("pets").select("id, owner_id").in("owner_id", ownerIds),
-      ])
-
-      const countMap: Record<string, number> = {}
-      for (const p of petCounts ?? []) {
-        countMap[p.owner_id] = (countMap[p.owner_id] ?? 0) + 1
-      }
-
-      const ownerList: ConnectedOwner[] = (profiles ?? []).map((p: { id: string; full_name: string }) => ({
-        id:        p.id,
-        full_name: p.full_name,
-        petCount:  countMap[p.id] ?? 0,
-      }))
-      setOwners(ownerList)
-
-      // Load services and hours
-      const [{ data: svcData }, { data: hoursData }] = await Promise.all([
+      const [{ data: profiles }, { data: pets }, { data: svcData }, { data: hoursData }] = await Promise.all([
+        ownerIds.length > 0
+          ? supabase.from("profiles").select("id, full_name").in("id", ownerIds)
+          : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
+        ownerIds.length > 0
+          ? supabase.from("pets").select("*").in("owner_id", ownerIds).order("name")
+          : Promise.resolve({ data: [] as Pet[] }),
         supabase.from("services").select("*").eq("clinic_id", cid).eq("is_active", true).order("name"),
         supabase.from("clinic_hours").select("*").eq("clinic_id", cid),
       ])
+
+      const nameById: Record<string, string> = {}
+      for (const p of (profiles as { id: string; full_name: string }[] | null) ?? []) {
+        nameById[p.id] = p.full_name
+      }
+      const rowList: OwnerPetRow[] = ((pets as Pet[] | null) ?? []).map((pet) => ({
+        owner_id:   pet.owner_id,
+        owner_name: nameById[pet.owner_id] ?? "—",
+        pet,
+      }))
+      rowList.sort((a, b) => a.owner_name.localeCompare(b.owner_name, "sr"))
+
+      setRows(rowList)
       setServices((svcData as Service[]) ?? [])
       const map = new Map<number, ClinicHours>()
       for (const h of (hoursData as ClinicHours[]) ?? []) map.set(h.weekday, h)
       setClinicHoursMap(map)
 
-      // Handle preselected params from podsetnici
-      if (preselectedOwnerId) {
-        const matchOwner = ownerList.find((o) => o.id === preselectedOwnerId)
-        if (matchOwner) {
-          setSelectedOwner(matchOwner)
-          // load pets for this owner
-          const { data: ownerPets } = await supabase.from("pets").select("*").eq("owner_id", preselectedOwnerId).order("name")
-          const loadedPets = (ownerPets as Pet[]) ?? []
-          setPets(loadedPets)
-          if (preselectedPetId) {
-            const matchPet = loadedPets.find((p) => p.id === preselectedPetId)
-            if (matchPet) {
-              setSelectedPet(matchPet)
-              setStep(3)
-            } else {
-              setStep(2)
-            }
-          } else {
-            setStep(2)
-          }
-        }
+      // Handle preselection from podsetnici
+      if (preselectedOwnerId && preselectedPetId) {
+        const match = rowList.find((r) => r.owner_id === preselectedOwnerId && r.pet.id === preselectedPetId)
+        if (match) { setSelectedRow(match); setStep(2) }
+      } else if (preselectedOwnerId) {
+        setQuery(nameById[preselectedOwnerId] ?? "")
       }
 
       setLoading(false)
@@ -149,94 +139,107 @@ function VetBookingPageInner() {
     init()
   }, [preselectedOwnerId, preselectedPetId])
 
-  // Load pets when owner selected
-  const loadPets = useCallback(async (ownerId: string) => {
-    const supabase = createClient()
-    const { data } = await supabase.from("pets").select("*").eq("owner_id", ownerId).order("name")
-    setPets((data as Pet[]) ?? [])
-  }, [])
+  const filteredRows = useMemo(() => {
+    if (!query.trim()) return rows
+    const q = norm(query.trim())
+    return rows.filter((r) =>
+      norm(r.owner_name).includes(q) ||
+      norm(r.pet.name).includes(q) ||
+      (r.pet.breed ? norm(r.pet.breed).includes(q) : false)
+    )
+  }, [rows, query])
 
-  // Load slots when date + service + clinic ready
-  useEffect(() => {
+  const loadSlots = useCallback(async () => {
     if (!selectedDate || !selectedService || !clinicId) return
-    async function loadSlots() {
-      setLoadingSlots(true)
-      setShowAllSlots(false)
-      const supabase = createClient()
-      const dayStr   = toLocalDateStr(selectedDate!)
-      const dayStartDate = new Date(`${dayStr}T00:00:00`)
-      const dayEndDate   = new Date(`${dayStr}T23:59:59`)
+    setLoadingSlots(true)
+    setShowAllSlots(false)
+    const supabase = createClient()
+    const dayStr   = toLocalDateStr(selectedDate)
+    const [startISO, endISO] = belgradeDayBoundsUTC(dayStr)
 
-      const { data: apptData } = await supabase
-        .from("appointments")
-        .select("scheduled_at, service_id")
-        .eq("clinic_id", clinicId)
-        .eq("status", "confirmed")
-        .gte("scheduled_at", dayStartDate.toISOString())
-        .lte("scheduled_at", dayEndDate.toISOString())
+    const { data: apptData } = await supabase
+      .from("appointments")
+      .select("scheduled_at, duration_minutes, buffer_after_minutes, service_id")
+      .eq("clinic_id", clinicId)
+      .eq("status", "confirmed")
+      .gte("scheduled_at", startISO)
+      .lt("scheduled_at", endISO)
 
-      const appts = apptData ?? []
-      let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
-
-      if (appts.length > 0) {
-        const bookedServiceIds = [...new Set(appts.map((a: { service_id: string }) => a.service_id))]
-        const { data: bookedSvcs } = await supabase
-          .from("services")
-          .select("id, duration_minutes, buffer_after_minutes")
-          .in("id", bookedServiceIds)
-        serviceMap = Object.fromEntries(
-          (bookedSvcs ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
-            s.id,
-            { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
-          ])
-        )
-      }
-
-      const intervals = buildOccupiedIntervals(appts, serviceMap)
-
-      const weekday   = selectedDate!.getDay()
-      const hours     = clinicHoursMap.get(weekday)
-      const openTime  = hours?.open_time  ?? "09:00"
-      const closeTime = hours?.close_time ?? "17:00"
-
-      const ranked = generateOptimizedSlots(
-        { date: dayStr, durationMin: selectedService!.duration_minutes, intervals, openTime, closeTime },
-        "advisory",
-        selectedService!.duration_minutes,
+    const appts = apptData ?? []
+    const legacyIds = appts.filter((a) => a.duration_minutes == null).map((a) => a.service_id)
+    let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
+    if (legacyIds.length > 0) {
+      const { data: legacy } = await supabase
+        .from("services")
+        .select("id, duration_minutes, buffer_after_minutes")
+        .in("id", [...new Set(legacyIds)])
+      serviceMap = Object.fromEntries(
+        (legacy ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
+          s.id, { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
+        ])
       )
-      setRankedSlots(ranked)
-      setLoadingSlots(false)
     }
-    loadSlots()
+
+    const intervals = appts.map((a) => {
+      const start = new Date(a.scheduled_at).getTime()
+      const dur   = a.duration_minutes ?? serviceMap[a.service_id]?.duration_minutes     ?? 30
+      const buf   = a.buffer_after_minutes ?? serviceMap[a.service_id]?.buffer_after_minutes ?? 0
+      return { start, end: start + (dur + buf) * 60_000 }
+    })
+
+    const weekday   = belgradeWeekday(dayStr)
+    const hours     = clinicHoursMap.get(weekday)
+    const openTime  = hours?.open_time  ?? "09:00"
+    const closeTime = hours?.close_time ?? "17:00"
+
+    const ranked = generateOptimizedSlots(
+      {
+        date:        dayStr,
+        durationMin: selectedService.duration_minutes,
+        intervals,
+        openTime,
+        closeTime,
+        // Vets can book walk-ins right now; no lead-time guard, just skip past slots.
+        notBefore:   new Date(),
+      },
+      "advisory",
+      selectedService.duration_minutes,
+    )
+    setRankedSlots(ranked)
+    setLoadingSlots(false)
   }, [selectedDate, selectedService, clinicId, clinicHoursMap])
 
+  useEffect(() => { loadSlots() }, [loadSlots])
+
   async function handleConfirm() {
-    if (!selectedPet || !selectedService || !selectedSlot || !clinicId || !selectedOwner) return
+    if (!selectedRow || !selectedService || !selectedSlot || !clinicId) return
     setSaving(true)
     setErrorMsg("")
     const supabase = createClient()
     const { error } = await supabase.from("appointments").insert({
       clinic_id:    clinicId,
-      pet_id:       selectedPet.id,
+      pet_id:       selectedRow.pet.id,
       service_id:   selectedService.id,
-      owner_id:     selectedOwner.id,
+      owner_id:     selectedRow.owner_id,
       scheduled_at: selectedSlot,
       status:       "confirmed",
       booked_by:    "vet",
     })
     setSaving(false)
-    if (error) {
-      setErrorMsg("Greška pri zakazivanju termina. Pokušajte ponovo.")
-    } else {
-      setStep(5)
+    if (!error) { setStep(4); return }
+    if (error.code === "23P01") {
+      setErrorMsg("Termin je upravo zauzet. Odaberite drugi.")
+      setSelectedSlot("")
+      await loadSlots()
+      return
     }
+    setErrorMsg("Greška pri zakazivanju termina. Pokušajte ponovo.")
   }
 
   const weekDays = getWeekDays(weekStart)
 
-  // Determine if a weekday should be skipped
   function isDayClosed(day: Date): boolean {
-    const weekday = day.getDay()
+    const weekday = belgradeWeekday(toLocalDateStr(day))
     const hours   = clinicHoursMap.get(weekday)
     if (hours) return hours.is_closed
     return weekday === 0 || weekday === 6
@@ -252,7 +255,7 @@ function VetBookingPageInner() {
     )
   }
 
-  if (step === 5) {
+  if (step === 4) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -266,13 +269,13 @@ function VetBookingPageInner() {
         <div className="space-y-1">
           <h2 className="text-xl">Termin zakazan!</h2>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            {selectedPet?.name} · {selectedService?.name}
+            {selectedRow?.pet.name} · {selectedService?.name}
             <br />
-            {selectedOwner?.full_name}
+            {selectedRow?.owner_name}
             <br />
             {selectedSlot && (() => {
               const d = new Date(selectedSlot)
-              return `${d.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })}`
+              return `${d.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Belgrade" })} ${d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Belgrade" })}`
             })()}
           </p>
         </div>
@@ -302,101 +305,96 @@ function VetBookingPageInner() {
             <ArrowLeft size={15} strokeWidth={2} />
           </button>
           <div>
-            <h1 className="text-2xl">Nova zakazivanje</h1>
+            <h1 className="text-2xl">Novo zakazivanje</h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Korak {step} od 4
+              Korak {step} od 3
             </p>
           </div>
         </div>
       </motion.div>
 
-      {/* Step 1 — Select owner */}
+      {/* Step 1 — Owner + pet (combined searchable list) */}
       {step === 1 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-3">
           <div className="flex items-center gap-2 mb-2">
             <div className="icon-sm icon-blue">
               <Users size={14} strokeWidth={2} />
             </div>
-            <h2 className="text-base" style={{ fontWeight: 700 }}>Odaberite vlasnika</h2>
+            <h2 className="text-base" style={{ fontWeight: 700 }}>Vlasnik i ljubimac</h2>
           </div>
-          {owners.length === 0 ? (
+
+          {rows.length === 0 ? (
             <div className="solid-card rounded-2xl py-14 text-center">
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nema povezanih vlasnika.</p>
             </div>
           ) : (
-            owners.map((owner, i) => (
-              <motion.button
-                key={owner.id}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04, duration: 0.22 }}
-                onClick={async () => {
-                  setSelectedOwner(owner)
-                  await loadPets(owner.id)
-                  setStep(2)
-                }}
-                className="w-full text-left solid-card rounded-xl p-4 flex items-center gap-4 transition-all"
-                style={{
-                  border: selectedOwner?.id === owner.id ? "1px solid var(--brand)" : "1px solid var(--border)",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--brand)" }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = selectedOwner?.id === owner.id ? "var(--brand)" : "var(--border)" }}
+            <>
+              <div
+                className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+                style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
               >
-                <div className="icon-md icon-brand flex-none">
-                  <Users size={16} strokeWidth={1.75} />
+                <Search size={14} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Pretraga po vlasniku ili imenu ljubimca…"
+                  className="flex-1 bg-transparent outline-none text-sm"
+                  autoFocus
+                />
+              </div>
+
+              {filteredRows.length === 0 ? (
+                <div className="solid-card rounded-2xl py-10 text-center">
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nema rezultata za „{query}“.</p>
                 </div>
-                <div>
-                  <p className="text-sm" style={{ fontWeight: 600 }}>{owner.full_name}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {owner.petCount} {owner.petCount === 1 ? "ljubimac" : owner.petCount < 5 ? "ljubimca" : "ljubimaca"}
-                  </p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredRows.map((r, i) => (
+                    <motion.button
+                      key={`${r.owner_id}:${r.pet.id}`}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(i * 0.03, 0.25), duration: 0.18 }}
+                      onClick={() => { setSelectedRow(r); setStep(2) }}
+                      className="w-full text-left solid-card rounded-xl p-3.5 flex items-center gap-3 transition-all"
+                      style={{
+                        border: selectedRow?.pet.id === r.pet.id ? "1px solid var(--brand)" : "1px solid var(--border)",
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--brand)" }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = selectedRow?.pet.id === r.pet.id ? "var(--brand)" : "var(--border)" }}
+                    >
+                      <div className="icon-md icon-brand flex-none">
+                        <PawPrint size={16} strokeWidth={1.75} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm truncate" style={{ fontWeight: 600 }}>
+                          {r.pet.name}
+                          {r.pet.breed && (
+                            <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · {r.pet.breed}</span>
+                          )}
+                        </p>
+                        <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
+                          {r.owner_name}
+                        </p>
+                      </div>
+                    </motion.button>
+                  ))}
                 </div>
-              </motion.button>
-            ))
+              )}
+            </>
           )}
         </motion.div>
       )}
 
-      {/* Step 2 — Select pet */}
+      {/* Step 2 — Select service */}
       {step === 2 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-3">
           <div className="mb-2">
-            <h2 className="text-base" style={{ fontWeight: 700 }}>Odaberite ljubimca</h2>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{selectedOwner?.full_name}</p>
-          </div>
-          {pets.length === 0 ? (
-            <div className="solid-card rounded-2xl py-14 text-center">
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>Vlasnik nema dodanih ljubimaca.</p>
-            </div>
-          ) : (
-            pets.map((pet, i) => (
-              <motion.button
-                key={pet.id}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04, duration: 0.22 }}
-                onClick={() => { setSelectedPet(pet); setStep(3) }}
-                className="w-full text-left solid-card rounded-xl p-4 flex items-center gap-4 transition-all"
-                style={{
-                  border: selectedPet?.id === pet.id ? "1px solid var(--brand)" : "1px solid var(--border)",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--brand)" }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = selectedPet?.id === pet.id ? "var(--brand)" : "var(--border)" }}
-              >
-                <p className="text-sm" style={{ fontWeight: 600 }}>{pet.name}</p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{pet.breed ?? "—"}</p>
-              </motion.button>
-            ))
-          )}
-        </motion.div>
-      )}
-
-      {/* Step 3 — Select service */}
-      {step === 3 && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-3">
-          <div className="mb-2">
             <h2 className="text-base" style={{ fontWeight: 700 }}>Odaberite uslugu</h2>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{selectedPet?.name}</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              {selectedRow?.pet.name} · {selectedRow?.owner_name}
+            </p>
           </div>
           {services.length === 0 ? (
             <div className="solid-card rounded-2xl py-14 text-center">
@@ -413,7 +411,7 @@ function VetBookingPageInner() {
                   setSelectedService(svc)
                   setSelectedDate(null)
                   setSelectedSlot("")
-                  setStep(4)
+                  setStep(3)
                 }}
                 className="w-full text-left solid-card rounded-xl p-4 flex items-center justify-between gap-4 transition-all"
                 style={{
@@ -444,13 +442,13 @@ function VetBookingPageInner() {
         </motion.div>
       )}
 
-      {/* Step 4 — Select date + slot */}
-      {step === 4 && (
+      {/* Step 3 — Select date + slot */}
+      {step === 3 && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.24 }} className="space-y-5">
           <div className="mb-2">
             <h2 className="text-base" style={{ fontWeight: 700 }}>Odaberite datum i termin</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              {selectedPet?.name} · {selectedService?.name}
+              {selectedRow?.pet.name} · {selectedService?.name}
             </p>
           </div>
 

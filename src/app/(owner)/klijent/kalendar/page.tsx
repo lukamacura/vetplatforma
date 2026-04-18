@@ -417,7 +417,7 @@ export default function OwnerCalendarPage() {
                     <span
                       style={{
                         width: 4, height: 4, borderRadius: "50%",
-                        background: isSelected ? "rgba(255,255,255,0.95)" : "var(--brand)",
+                        background: isSelected ? "rgba(255,255,255,0.95)" : "var(--blue)",
                       }}
                     />
                   )}
@@ -446,7 +446,7 @@ export default function OwnerCalendarPage() {
         {/* Dot legend */}
         <div className="flex items-center justify-center gap-3 flex-wrap mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
           <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand)" }} />
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--blue)" }} />
             Termin
           </span>
           <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
@@ -496,13 +496,20 @@ export default function OwnerCalendarPage() {
           {selectedAppts.length > 0 && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
-                <div className="icon-sm icon-brand">
+                <div className="icon-sm icon-blue">
                   <CalendarDays size={13} strokeWidth={2.25} />
                 </div>
                 <h3 className="text-sm" style={{ fontWeight: 700 }}>
-                  Termini
+                  Zakazani termini
                 </h3>
               </div>
+              <div
+                className="rounded-2xl p-3 space-y-2"
+                style={{
+                  background: "linear-gradient(135deg, var(--blue-tint) 0%, #EFF6FF 100%)",
+                  border: "1px solid rgba(37,99,235,0.15)",
+                }}
+              >
               {selectedAppts.map((a) => {
                 const isCancelled = a.status === "cancelled"
                 const isNoShow    = a.status === "no_show"
@@ -510,8 +517,12 @@ export default function OwnerCalendarPage() {
                   <Link
                     key={a.id}
                     href="/klijent"
-                    className="solid-card rounded-2xl p-3.5 flex items-center gap-3"
-                    style={{ opacity: isCancelled || isNoShow ? 0.6 : 1 }}
+                    className="rounded-xl p-3 flex items-center gap-3"
+                    style={{
+                      background: "rgba(255,255,255,0.75)",
+                      backdropFilter: "blur(8px)",
+                      opacity: isCancelled || isNoShow ? 0.6 : 1,
+                    }}
                   >
                     <div className="flex flex-col items-center shrink-0" style={{ minWidth: 44 }}>
                       <span
@@ -544,9 +555,9 @@ export default function OwnerCalendarPage() {
                             className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px]"
                             style={{
                               fontWeight: 600,
-                              background: "var(--blue-tint)",
-                              color: "var(--blue)",
-                              border: "1px solid rgba(37,99,235,0.15)",
+                              background: "var(--brand-tint)",
+                              color: "var(--brand)",
+                              border: "1px solid rgba(43,181,160,0.2)",
                             }}
                           >
                             <Stethoscope size={9} strokeWidth={2.5} />
@@ -569,6 +580,7 @@ export default function OwnerCalendarPage() {
                   </Link>
                 )
               })}
+              </div>
             </section>
           )}
 

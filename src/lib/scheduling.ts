@@ -5,7 +5,11 @@
  * 1. 15-min base-unit grid — all slots snap to :00/:15/:30/:45
  * 2. Adaptive buffers — post-appointment cooldown per service
  * 3. Anchor booking — contiguous-block bias to eliminate dead air
+ *
+ * All wall-clock math is anchored to Europe/Belgrade via `./time`.
  */
+
+import { belgradeToUTC, belgradeWeekday } from "./time"
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -26,11 +30,17 @@ export interface RankedSlot {
 }
 
 export interface SchedulingConfig {
-  date:         string          // YYYY-MM-DD
+  date:         string          // YYYY-MM-DD (Belgrade calendar day)
   durationMin:  number          // service duration in minutes
   intervals:    OccupiedInterval[]
-  openTime:     string          // HH:MM
-  closeTime:    string          // HH:MM
+  openTime:     string          // HH:MM (Belgrade wall-clock)
+  closeTime:    string          // HH:MM (Belgrade wall-clock)
+  /**
+   * Earliest allowed slot start. Slots before this instant are dropped.
+   * Use to enforce "no booking in the past" + minimum lead time.
+   * Omit for vets to allow same-minute walk-in booking.
+   */
+  notBefore?:   Date
 }
 
 interface ServiceDurationBuffer {
@@ -98,19 +108,21 @@ export function buildOccupiedIntervals(
  * Services >= 60 min are further constrained to 30-min boundaries.
  */
 export function generateGridSlots(config: SchedulingConfig): string[] {
-  const { date, durationMin, intervals, openTime, closeTime } = config
+  const { date, durationMin, intervals, openTime, closeTime, notBefore } = config
   const openMinutes  = parseTime(openTime)
   const closeMinutes = parseTime(closeTime)
   const alignment    = durationMin >= 60 ? 30 : BASE_UNIT
 
   const slots: string[] = []
-  const baseDate = new Date(`${date}T00:00:00`)
+  const dayMidnightMs = belgradeToUTC(date, "00:00").getTime()
+  const notBeforeMs   = notBefore?.getTime() ?? 0
 
   for (let min = openMinutes; min + durationMin <= closeMinutes; min += BASE_UNIT) {
     if (min % alignment !== 0) continue
 
-    const slotStart = baseDate.getTime() + min * 60_000
+    const slotStart = dayMidnightMs + min * 60_000
     const slotEnd   = slotStart + durationMin * 60_000
+    if (slotStart < notBeforeMs) continue
     if (!overlaps(slotStart, slotEnd, intervals)) {
       slots.push(new Date(slotStart).toISOString())
     }
@@ -156,9 +168,11 @@ function rankSlot(
 /**
  * Main entry point: generate ranked slots with anchor-booking bias.
  *
- * - `mode: "strict"` (owners): only contiguous slots returned.
- *   On an empty day, returns anchor-point slots only.
- * - `mode: "advisory"` (vets): all slots returned, sorted by rank.
+ * - `mode: "strict"` (owners): every free grid slot, sorted chronologically.
+ *   The DB exclusion constraint + buffers + notBefore already filter out
+ *   unavailable times; owners pick from the full menu.
+ * - `mode: "advisory"` (vets): every free slot, sorted contiguous-first
+ *   so the vet can pack the day tight when booking walk-ins.
  */
 export function generateOptimizedSlots(
   config: SchedulingConfig,
@@ -168,17 +182,16 @@ export function generateOptimizedSlots(
   const gridSlots = generateGridSlots(config)
   if (gridSlots.length === 0) return []
 
-  const openMs  = parseTime(config.openTime) * 60_000
-    + new Date(`${config.date}T00:00:00`).getTime()
-  const closeMs = parseTime(config.closeTime) * 60_000
-    + new Date(`${config.date}T00:00:00`).getTime()
+  const dayMidnightMs = belgradeToUTC(config.date, "00:00").getTime()
+  const openMs  = parseTime(config.openTime)  * 60_000 + dayMidnightMs
+  const closeMs = parseTime(config.closeTime) * 60_000 + dayMidnightMs
   const midpointMs = (openMs + closeMs) / 2
 
   const sorted = [...config.intervals].sort((a, b) => a.start - b.start)
   const amFrontier = computeFrontier(openMs, sorted)
   const pmFrontier = computeFrontier(
     Math.ceil(((parseTime(config.openTime) + parseTime(config.closeTime)) / 2) / BASE_UNIT) * BASE_UNIT * 60_000
-      + new Date(`${config.date}T00:00:00`).getTime(),
+      + dayMidnightMs,
     sorted,
   )
 
@@ -192,15 +205,9 @@ export function generateOptimizedSlots(
   })
 
   if (mode === "strict") {
-    const contiguous = ranked.filter((s) => s.rank.isContiguous)
-    if (contiguous.length > 0) return contiguous
-
-    // Empty day: offer slots at the two anchor points only
-    const anchorSlots = ranked.filter((s) => {
-      const ms = new Date(s.iso).getTime()
-      return ms === openMs || Math.abs(ms - midpointMs) < BASE_UNIT * 60_000
-    })
-    return anchorSlots.length > 0 ? anchorSlots : ranked.slice(0, 2)
+    return ranked.sort(
+      (a, b) => new Date(a.iso).getTime() - new Date(b.iso).getTime(),
+    )
   }
 
   // Advisory mode: sort contiguous-first, then by gap size.
@@ -230,18 +237,32 @@ export function getAvailableDays(
   hoursMap: Map<number, { is_closed: boolean }>,
   lookAheadDays: number = 14,
 ): string[] {
+  // Anchor to Belgrade "today" regardless of device TZ, then walk days forward
+  // by 24h increments. Weekday is resolved in Belgrade to stay consistent with
+  // clinic_hours rows.
   const days: string[] = []
+  const todayBgMidnight = belgradeToUTC(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Belgrade",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date()),
+    "00:00",
+  ).getTime()
+
   for (let i = 1; i <= lookAheadDays; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() + i)
-    const weekday = d.getDay()
+    const dayMs   = todayBgMidnight + i * 24 * 60 * 60_000
+    const dayStr  = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Belgrade",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date(dayMs))
+    const weekday = belgradeWeekday(dayStr)
     const hours   = hoursMap.get(weekday)
     if (hours) {
       if (hours.is_closed) continue
     } else {
       if (weekday === 0 || weekday === 6) continue
     }
-    days.push(toLocalDateStr(d))
+    days.push(dayStr)
   }
   return days
 }

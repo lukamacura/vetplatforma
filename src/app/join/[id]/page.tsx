@@ -3,139 +3,139 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { PawPrint, CheckCircle2, Heart } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { PawPrint, Loader2, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import type { Clinic } from "@/lib/types"
+import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
+
+type View = "loading" | "notFound" | "loggedOut" | "connecting" | "wrongRole" | "error"
 
 export default function JoinClinicPage() {
   const params = useParams()
   const router = useRouter()
   const slug = params.id as string
 
-  const [clinic, setClinic] = useState<Clinic | null>(null)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [alreadyConnected, setAlreadyConnected] = useState(false)
-  const [connecting, setConnecting] = useState(false)
-  const [done, setDone] = useState(false)
-  const [notFound, setNotFound] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [roleError, setRoleError] = useState(false)
+  const [view, setView] = useState<View>("loading")
+  const [clinicName, setClinicName] = useState<string>("")
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false
+
+    async function run() {
       const supabase = createClient()
 
-      const { data: clinicData } = await supabase
-        .from("clinics")
-        .select("*")
-        .eq("slug", slug)
-        .single()
+      const clinic = await fetchClinicBySlug(supabase, slug)
+      if (cancelled) return
 
-      if (!clinicData) {
-        setNotFound(true)
-        setLoading(false)
+      if (!clinic) {
+        setView("notFound")
         return
       }
-      setClinic(clinicData as Clinic)
+      setClinicName(clinic.name)
 
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setIsLoggedIn(true)
-        const { data: conn } = await supabase
-          .from("connections")
-          .select("id")
-          .eq("owner_id", user.id)
-          .eq("clinic_id", clinicData.id)
-          .single()
-        if (conn) setAlreadyConnected(true)
+      if (cancelled) return
+
+      if (!user) {
+        setView("loggedOut")
+        return
       }
 
-      setLoading(false)
-    }
-    load()
-  }, [slug])
+      setView("connecting")
+      const result = await connectOwnerToClinicBySlug(supabase, user.id, slug)
+      if (cancelled) return
 
-  async function handleConnect() {
-    if (!clinic) return
-    setConnecting(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      router.push(`/register?clinic=${slug}`)
-      return
-    }
+      if (result.success) {
+        router.replace("/klijent")
+        return
+      }
 
-    // Get or check profile is owner role
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+      if (result.error === "wrong-role") {
+        setView("wrongRole")
+        return
+      }
 
-    if (profile?.role !== "owner") {
-      setConnecting(false)
-      setRoleError(true)
-      return
+      setView("error")
     }
 
-    await supabase
-      .from("connections")
-      .upsert({ owner_id: user.id, clinic_id: clinic.id }, { onConflict: "owner_id,clinic_id" })
+    run()
+    return () => {
+      cancelled = true
+    }
+  }, [slug, router])
 
-    setConnecting(false)
-    setDone(true)
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#f0fbf9] flex items-center justify-center">
-        <p className="text-sm text-muted-foreground">Učitavanje...</p>
-      </div>
-    )
-  }
-
-  if (notFound) {
+  if (view === "loading" || view === "connecting") {
     return (
       <div className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
-        <Card className="max-w-sm w-full text-center">
-          <CardContent className="py-10 space-y-3">
-            <p className="font-semibold">Klinika nije pronađena.</p>
-            <p className="text-sm text-muted-foreground">Proverite link koji ste dobili od veterinara.</p>
+        <Card className="max-w-sm w-full shadow-xl">
+          <CardContent className="py-12 text-center space-y-4">
+            <Loader2 className="h-10 w-10 text-[#2BB5A0] animate-spin mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              {view === "connecting" && clinicName
+                ? `Povezujemo vas sa klinikom ${clinicName}...`
+                : "Učitavanje..."}
+            </p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  if (done || alreadyConnected) {
+  if (view === "notFound") {
+    return (
+      <div className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full text-center">
+          <CardContent className="py-10 space-y-3">
+            <p className="font-semibold">Klinika nije pronađena.</p>
+            <p className="text-sm text-muted-foreground">
+              Proverite link koji ste dobili od veterinara.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (view === "wrongRole") {
     return (
       <div className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
         <Card className="max-w-sm w-full shadow-xl">
-          <CardContent className="py-10 text-center space-y-5">
-            <div className="mx-auto w-fit bg-emerald-100 p-3 rounded-full">
-              <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+          <CardContent className="py-10 text-center space-y-4">
+            <div className="mx-auto w-fit bg-amber-100 p-3 rounded-full">
+              <AlertCircle className="h-8 w-8 text-amber-600" />
             </div>
-            <div className="space-y-1">
-              <h2 className="text-xl font-bold">
-                {alreadyConnected && !done ? "Već ste povezani!" : "Uspešno povezani!"}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Sada ste u sistemu klinike <span className="font-semibold text-foreground">{clinic?.name}</span>.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 bg-slate-50 rounded-lg p-3 text-left border">
-              <Heart className="h-6 w-6 text-red-500 fill-red-500 flex-none" />
-              <p className="text-xs text-muted-foreground">
-                Vaš veterinar će Vas obavestiti o sledećoj vakcinaciji čim unese podatke Vašeg ljubimca.
-              </p>
-            </div>
+            <p className="font-semibold">Ovaj link je za vlasnike ljubimaca.</p>
+            <p className="text-sm text-muted-foreground">
+              Prijavljeni ste kao veterinar. Odjavite se i prijavite kao vlasnik da biste se povezali.
+            </p>
             <Button
-              onClick={() => router.push("/klijent")}
+              onClick={() => router.push("/dashboard")}
+              variant="outline"
+              className="w-full"
+            >
+              Nazad na dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (view === "error") {
+    return (
+      <div className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full text-center">
+          <CardContent className="py-10 space-y-3">
+            <p className="font-semibold">Došlo je do greške.</p>
+            <p className="text-sm text-muted-foreground">
+              Pokušajte ponovo za par trenutaka.
+            </p>
+            <Button
+              onClick={() => window.location.reload()}
               className="w-full bg-[#2BB5A0] hover:bg-[#239684] text-white"
             >
-              Idi na početnu
+              Pokušaj ponovo
             </Button>
           </CardContent>
         </Card>
@@ -152,42 +152,27 @@ export default function JoinClinicPage() {
           </div>
           <CardTitle className="text-xl">Povežite se sa klinikom</CardTitle>
           <CardDescription>
-            Vaš veterinar <span className="font-semibold text-foreground">{clinic?.name}</span> Vas poziva da postanete digitalni klijent.
+            Vaš veterinar <span className="font-semibold text-foreground">{clinicName}</span> Vas poziva da postanete digitalni klijent.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-[#2BB5A0]/5 border border-[#2BB5A0]/20 rounded-lg p-3 text-sm text-[#239684]">
-            Vaš veterinar dobija trenutni uvid u vitalne podatke Vašeg ljubimca — vakcinacije, kontrole, težina.
+            Nakon registracije, automatski ćete biti povezani sa klinikom.
           </div>
 
-          {!isLoggedIn ? (
-            <div className="space-y-2">
-              <Link href={`/register?clinic=${slug}`}>
-                <Button className="w-full h-12 text-base bg-[#2BB5A0] hover:bg-[#239684] text-white">
-                  Registrujte se i povežite se
-                </Button>
-              </Link>
-              <p className="text-center text-xs text-muted-foreground">
-                Već imate nalog?{" "}
-                <Link href={`/login?clinic=${slug}`} className="text-[#2BB5A0] font-medium">Prijavite se</Link>
-              </p>
-            </div>
-          ) : (
-            <>
-              <Button
-                onClick={handleConnect}
-                disabled={connecting}
-                className="w-full h-12 text-base bg-[#2BB5A0] hover:bg-[#239684] text-white"
-              >
-                {connecting ? "Povezivanje..." : "Poveži se sa klinikom"}
+          <div className="space-y-2">
+            <Link href={`/register?clinic=${slug}`} className="block">
+              <Button className="w-full h-12 text-base bg-[#2BB5A0] hover:bg-[#239684] text-white">
+                Registrujte se i povežite se
               </Button>
-              {roleError && (
-                <p className="text-sm text-red-600 text-center">
-                  Ovaj link je namenjen vlasnicima ljubimaca, ne veterinarima.
-                </p>
-              )}
-            </>
-          )}
+            </Link>
+            <p className="text-center text-xs text-muted-foreground">
+              Već imate nalog?{" "}
+              <Link href={`/login?clinic=${slug}`} className="text-[#2BB5A0] font-medium">
+                Prijavite se
+              </Link>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

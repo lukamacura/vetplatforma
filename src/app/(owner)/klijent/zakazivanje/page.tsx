@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Building2, CheckCircle2, Clock, Banknote } from "lucide-react"
@@ -8,12 +8,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import {
-  buildOccupiedIntervals,
   generateOptimizedSlots,
   getAvailableDays,
   formatSlot,
 } from "@/lib/scheduling"
+import { belgradeDayBoundsUTC, belgradeWeekday } from "@/lib/time"
 import type { Pet, Service, Clinic, ClinicHours } from "@/lib/types"
+
+// Owners can't book in the past; enforce a 15-minute minimum lead time
+// so they don't scramble a vet with an "in 2 minutes" slot.
+const OWNER_MIN_LEAD_MS = 15 * 60_000
 
 function BookingPageInner() {
   const router           = useRouter()
@@ -39,6 +43,7 @@ function BookingPageInner() {
   const [selectedSlot, setSelectedSlot]       = useState("")
   const [availableSlots, setAvailableSlots]   = useState<string[]>([])
   const [saving, setSaving]                   = useState(false)
+  const [errorMsg, setErrorMsg]               = useState("")
 
   useEffect(() => {
     async function load() {
@@ -100,57 +105,71 @@ function BookingPageInner() {
     [clinicHoursMap, selectedClinic],
   )
 
-  useEffect(() => {
+  const loadSlots = useCallback(async () => {
     if (!selectedDay || !selectedService || !selectedClinic) return
-    async function loadSlots() {
-      const supabase = createClient()
-      const dayStartDate = new Date(`${selectedDay}T00:00:00`)
-      const dayEndDate   = new Date(`${selectedDay}T23:59:59`)
+    const supabase = createClient()
+    const [startISO, endISO] = belgradeDayBoundsUTC(selectedDay)
 
-      const { data: apptData } = await supabase
-        .from("appointments")
-        .select("scheduled_at, service_id")
-        .eq("clinic_id", selectedClinic!.id)
-        .eq("status", "confirmed")
-        .gte("scheduled_at", dayStartDate.toISOString())
-        .lte("scheduled_at", dayEndDate.toISOString())
+    const { data: apptData } = await supabase
+      .from("appointments")
+      .select("scheduled_at, duration_minutes, buffer_after_minutes, service_id")
+      .eq("clinic_id", selectedClinic.id)
+      .eq("status", "confirmed")
+      .gte("scheduled_at", startISO)
+      .lt("scheduled_at", endISO)
 
-      const appts = apptData ?? []
-      let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
+    const appts = apptData ?? []
 
-      if (appts.length > 0) {
-        const bookedServiceIds = [...new Set(appts.map((a: { service_id: string }) => a.service_id))]
-        const { data: bookedServices } = await supabase
-          .from("services")
-          .select("id, duration_minutes, buffer_after_minutes")
-          .in("id", bookedServiceIds)
-        serviceMap = Object.fromEntries(
-          (bookedServices ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
-            s.id,
-            { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
-          ])
-        )
-      }
-
-      const intervals = buildOccupiedIntervals(appts, serviceMap)
-
-      const weekday   = new Date(`${selectedDay}T12:00:00`).getDay()
-      const hours     = clinicHoursMap.get(weekday)
-      const openTime  = hours?.open_time  ?? "09:00"
-      const closeTime = hours?.close_time ?? "17:00"
-
-      const ranked = generateOptimizedSlots(
-        { date: selectedDay, durationMin: selectedService!.duration_minutes, intervals, openTime, closeTime },
-        "strict",
+    // Prefer snapshot columns on the appointment row; fall back to services
+    // lookup only for legacy rows pre-migration.
+    const legacyIds = appts
+      .filter((a) => a.duration_minutes == null)
+      .map((a) => a.service_id)
+    let serviceMap: Record<string, { duration_minutes: number; buffer_after_minutes: number }> = {}
+    if (legacyIds.length > 0) {
+      const { data: legacy } = await supabase
+        .from("services")
+        .select("id, duration_minutes, buffer_after_minutes")
+        .in("id", [...new Set(legacyIds)])
+      serviceMap = Object.fromEntries(
+        (legacy ?? []).map((s: { id: string; duration_minutes: number; buffer_after_minutes: number }) => [
+          s.id, { duration_minutes: s.duration_minutes, buffer_after_minutes: s.buffer_after_minutes },
+        ])
       )
-      setAvailableSlots(ranked.map((r) => r.iso))
     }
-    loadSlots()
+
+    const intervals = appts.map((a) => {
+      const start = new Date(a.scheduled_at).getTime()
+      const dur   = a.duration_minutes ?? serviceMap[a.service_id]?.duration_minutes     ?? 30
+      const buf   = a.buffer_after_minutes ?? serviceMap[a.service_id]?.buffer_after_minutes ?? 0
+      return { start, end: start + (dur + buf) * 60_000 }
+    })
+
+    const weekday   = belgradeWeekday(selectedDay)
+    const hours     = clinicHoursMap.get(weekday)
+    const openTime  = hours?.open_time  ?? "09:00"
+    const closeTime = hours?.close_time ?? "17:00"
+
+    const ranked = generateOptimizedSlots(
+      {
+        date:        selectedDay,
+        durationMin: selectedService.duration_minutes,
+        intervals,
+        openTime,
+        closeTime,
+        notBefore:   new Date(Date.now() + OWNER_MIN_LEAD_MS),
+      },
+      "strict",
+    )
+    setAvailableSlots(ranked.map((r) => r.iso))
   }, [selectedDay, selectedService, selectedClinic, clinicHoursMap])
+
+  useEffect(() => { loadSlots() }, [loadSlots])
 
   async function handleConfirm() {
     if (!selectedPet || !selectedService || !selectedSlot || !selectedClinic || !userId) return
     setSaving(true)
+    setErrorMsg("")
     const supabase = createClient()
     const { error } = await supabase.from("appointments").insert({
       clinic_id:    selectedClinic.id,
@@ -162,7 +181,16 @@ function BookingPageInner() {
       booked_by:    "owner",
     })
     setSaving(false)
-    if (!error) setStep(4)
+    if (!error) { setStep(4); return }
+    // Postgres exclusion-constraint violation — slot was taken between
+    // slot-fetch and tap. Refresh the list so the user sees the new reality.
+    if (error.code === "23P01") {
+      setErrorMsg("Taj termin je upravo rezervisan. Molimo odaberite drugi.")
+      setSelectedSlot("")
+      await loadSlots()
+      return
+    }
+    setErrorMsg("Greška pri zakazivanju. Pokušajte ponovo.")
   }
 
   if (loading) {
@@ -386,6 +414,20 @@ function BookingPageInner() {
               )}
             </CardContent>
           </Card>
+
+          {errorMsg && (
+            <div
+              className="rounded-xl px-4 py-3 text-sm"
+              style={{
+                background: "var(--red-tint, rgba(220,38,38,0.08))",
+                color:      "var(--red)",
+                border:     "1px solid rgba(220,38,38,0.18)",
+                fontWeight: 600,
+              }}
+            >
+              {errorMsg}
+            </div>
+          )}
 
           {selectedSlot && (
             <div className="space-y-3">

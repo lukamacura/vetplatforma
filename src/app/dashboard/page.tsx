@@ -1,14 +1,14 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, CalendarPlus, Banknote } from "lucide-react"
-import { motion } from "framer-motion"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, ChevronDown, CalendarPlus, Banknote, Sparkles, Syringe, Stethoscope, NotebookPen, Lock, Loader2, Check } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
 import Link from "next/link"
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import { SPECIES_LABEL } from "@/lib/species"
-import type { AppointmentWithDetails } from "@/lib/types"
+import type { AppointmentWithDetails, Species } from "@/lib/types"
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
@@ -18,6 +18,28 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
+}
+
+type VetReminder = {
+  petId: string
+  ownerId: string
+  petName: string
+  petSpecies: Species
+  petPhotoUrl: string | null
+  type: "vaccine" | "control"
+  date: string // YYYY-MM-DD
+}
+
+function dayKeyFromLocal(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+function formatDateNumeric(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-")
+  return `${d}.${m}.${y}.`
 }
 
 function getMonthGrid(year: number, month: number): (Date | null)[] {
@@ -83,14 +105,22 @@ function StatCard({
 /* ── Appointment row ── */
 function AppointmentRow({
   appt,
-  index,
   isToday,
   onNoShow,
+  isExpanded,
+  onToggleExpand,
+  noteDraft,
+  onNoteDraftChange,
+  noteStatus,
 }: {
   appt: AppointmentWithDetails
-  index: number
   isToday: boolean
   onNoShow: (id: string) => void
+  isExpanded: boolean
+  onToggleExpand: (id: string) => void
+  noteDraft: string
+  onNoteDraftChange: (id: string, value: string) => void
+  noteStatus: "idle" | "saving" | "saved"
 }) {
   const now   = new Date()
   const start = new Date(appt.scheduled_at)
@@ -100,90 +130,191 @@ function AppointmentRow({
   const isNoShow   = appt.status === "no_show"
   const isCancelled = appt.status === "cancelled"
 
-  const timeColor = isNoShow || isCancelled ? "var(--text-muted)" : isNow ? "var(--brand)" : isPast ? "var(--text-muted)" : "var(--blue)"
+  const timeColor = isNoShow || isCancelled ? "var(--text-muted)" : isNow ? "var(--blue)" : isPast ? "var(--text-muted)" : "var(--blue)"
 
   const isActive = isNow && !isNoShow && !isCancelled
+  const hasNotes = !!(appt.vet_notes && appt.vet_notes.trim().length > 0)
 
   return (
-    <motion.div
-      variants={stagger.row}
-      className={`appt-row flex items-center gap-4 rounded-xl px-4 py-3 cursor-default ${isActive ? "appt-row-active" : ""}`}
-      style={{
-        opacity: (isPast || isNoShow || isCancelled) ? 0.5 : 1,
-      }}
-    >
-      {/* Time column */}
-      <div className="w-13 shrink-0 text-center">
-        <span className="text-sm tabular-nums leading-none" style={{ color: timeColor, fontWeight: 700 }}>
-          {formatTime(appt.scheduled_at)}
-        </span>
-        {isNow && !isNoShow && !isCancelled && (
-          <span className="badge badge-brand mt-1 block text-center" style={{ fontSize: 9, padding: "2px 6px" }}>
-            <span className="pulse-dot" />
-            SADA
-          </span>
-        )}
-      </div>
-
-      {/* Divider */}
+    <motion.div variants={stagger.row} className="space-y-0">
       <div
-        className="w-px self-stretch rounded-full shrink-0"
-        style={{ background: isNow && !isNoShow && !isCancelled ? "var(--brand)" : "var(--border)" }}
-      />
-
-      {/* Pet + service */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <PetAvatar photoUrl={appt.pet_photo_url} species={appt.pet_species} size={22} />
-          <span
-            className="text-sm truncate"
-            style={{
-              color: "var(--text-primary)",
-              fontWeight: 600,
-              textDecoration: isCancelled ? "line-through" : "none",
-            }}
-          >
-            {appt.pet_name}
+        className={`appt-row flex items-center gap-4 rounded-xl px-4 py-3 cursor-pointer ${isActive ? "appt-row-active" : ""}`}
+        style={{
+          opacity: (isPast || isNoShow || isCancelled) ? 0.5 : 1,
+        }}
+        role="button"
+        tabIndex={0}
+        onClick={() => onToggleExpand(appt.id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onToggleExpand(appt.id)
+          }
+        }}
+      >
+        {/* Time column */}
+        <div className="w-13 shrink-0 text-center">
+          <span className="text-sm tabular-nums leading-none" style={{ color: timeColor, fontWeight: 700 }}>
+            {formatTime(appt.scheduled_at)}
           </span>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            · {SPECIES_LABEL[appt.pet_species]}
-          </span>
+          {isNow && !isNoShow && !isCancelled && (
+            <span className="badge badge-blue mt-1 block text-center" style={{ fontSize: 9, padding: "2px 6px" }}>
+              <span className="pulse-dot" />
+              SADA
+            </span>
+          )}
         </div>
-        <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
-          {appt.service_name} · {appt.owner_name}
-        </p>
+
+        {/* Divider */}
+        <div
+          className="w-px self-stretch rounded-full shrink-0"
+          style={{ background: isNow && !isNoShow && !isCancelled ? "var(--blue)" : "var(--border)" }}
+        />
+
+        {/* Pet + service */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <PetAvatar photoUrl={appt.pet_photo_url} species={appt.pet_species} size={22} />
+            <span
+              className="text-sm truncate"
+              style={{
+                color: "var(--text-primary)",
+                fontWeight: 600,
+                textDecoration: isCancelled ? "line-through" : "none",
+              }}
+            >
+              {appt.pet_name}
+            </span>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              · {SPECIES_LABEL[appt.pet_species]}
+            </span>
+            {hasNotes && !isExpanded && (
+              <NotebookPen
+                size={11}
+                strokeWidth={2.25}
+                style={{ color: "var(--yellow)", opacity: 0.85 }}
+                aria-label="Ima belešku"
+              />
+            )}
+          </div>
+          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
+            {appt.service_name} · {appt.owner_name}
+          </p>
+        </div>
+
+        {/* Status badges + actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          {isNoShow ? (
+            <span className="badge badge-red">
+              <UserX size={10} strokeWidth={2} />
+              Nije došao
+            </span>
+          ) : isCancelled ? (
+            <span className="badge badge-muted">Otkazano</span>
+          ) : (
+            <>
+              <div className="badge badge-blue" style={{ gap: 4 }}>
+                <Clock size={11} strokeWidth={2} />
+                {appt.service_duration} min
+              </div>
+              {isToday && (isPast || isNow) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onNoShow(appt.id) }}
+                  className="no-show-btn flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
+                >
+                  <UserX size={11} strokeWidth={2} />
+                  Nije došao
+                </button>
+              )}
+            </>
+          )}
+          <ChevronDown
+            size={14}
+            strokeWidth={2}
+            className="transition-transform duration-200"
+            style={{
+              color: "var(--text-muted)",
+              transform: isExpanded ? "rotate(180deg)" : undefined,
+            }}
+          />
+        </div>
       </div>
 
-      {/* Status badges + actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        {isNoShow ? (
-          <span className="badge badge-red">
-            <UserX size={10} strokeWidth={2} />
-            Nije došao
-          </span>
-        ) : isCancelled ? (
-          <span className="badge badge-muted">Otkazano</span>
-        ) : (
-          <>
-            <div className="badge badge-blue" style={{ gap: 4 }}>
-              <Clock size={11} strokeWidth={2} />
-              {appt.service_duration} min
-            </div>
-            {isToday && (isPast || isNow) && (
-              <button
-                onClick={() => onNoShow(appt.id)}
-                className="no-show-btn flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
+      {/* Yellow private-notes editor — mirrors owner's "Privatna beleška" psychology */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="overflow-hidden"
+          >
+            <div
+              className="rounded-xl p-3 mt-2 space-y-2"
+              style={{
+                background: "linear-gradient(135deg, var(--yellow-tint) 0%, #FEFCE8 100%)",
+                border: "1px solid rgba(234,179,8,0.22)",
+              }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="icon-sm icon-yellow shrink-0">
+                    <NotebookPen size={12} strokeWidth={2.25} />
+                  </div>
+                  <h4 className="text-xs truncate" style={{ fontWeight: 700 }}>
+                    Beleška sa posete
+                  </h4>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] shrink-0" style={{ minHeight: 16 }}>
+                  {noteStatus === "saving" && (
+                    <>
+                      <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
+                      <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
+                    </>
+                  )}
+                  {noteStatus === "saved" && (
+                    <>
+                      <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                      <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5"
+                style={{
+                  background: "rgba(255,255,255,0.6)",
+                  color: "var(--yellow-text)",
+                  border: "1px solid rgba(234,179,8,0.22)",
+                  fontWeight: 600,
+                }}
               >
-                <UserX size={11} strokeWidth={2} />
-                Nije došao
-              </button>
-            )}
-          </>
+                <Lock size={11} strokeWidth={2.25} />
+                Privatna beleška (vlasnik ne vidi)
+              </div>
+
+              <textarea
+                value={noteDraft}
+                onChange={(e) => onNoteDraftChange(appt.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Dodaj beleške za ovu posetu…"
+                rows={3}
+                className="w-full rounded-xl px-3 py-2 text-sm resize-y outline-none transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.85)",
+                  border: "1px solid rgba(234,179,8,0.25)",
+                  color: "var(--text-primary)",
+                  minHeight: 80,
+                  lineHeight: 1.55,
+                }}
+              />
+            </div>
+          </motion.div>
         )}
-        {!isNoShow && !isCancelled && (
-          <ChevronRight size={14} strokeWidth={1.75} style={{ color: "var(--text-muted)" }} />
-        )}
-      </div>
+      </AnimatePresence>
     </motion.div>
   )
 }
@@ -198,6 +329,7 @@ export default function DashboardPage() {
   const [viewMonth,       setViewMonth]       = useState(() => new Date().getMonth())
   const [appointments,    setAppointments]    = useState<AppointmentWithDetails[]>([])
   const [monthDotCounts,  setMonthDotCounts]  = useState<Record<string, number>>({})
+  const [monthReminders,  setMonthReminders]  = useState<VetReminder[]>([])
   const [monthlyRevenue,        setMonthlyRevenue]        = useState<number | null>(null)
   const [monthlyApptCount,      setMonthlyApptCount]      = useState(0)
   const [monthlyCancelledCount, setMonthlyCancelledCount] = useState(0)
@@ -209,6 +341,14 @@ export default function DashboardPage() {
   const isToday = isSameDay(selectedDate, new Date())
 
   const [noShowError, setNoShowError] = useState<string | null>(null)
+
+  // Per-appointment vet notes editor state (debounced auto-save)
+  const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
+  const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
+  const [apptNoteStatus, setApptNoteStatus] = useState<Record<string, "idle" | "saving" | "saved">>({})
+
+  const debounceRefs  = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const savedHideRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   const handleNoShow = useCallback(async (id: string) => {
     setNoShowError(null)
@@ -223,6 +363,58 @@ export default function DashboardPage() {
       setAppointments((prev) =>
         prev.map((a) => a.id === id ? { ...a, status: "no_show" } : a)
       )
+    }
+  }, [])
+
+  const saveApptNote = useCallback(async (id: string, value: string) => {
+    const text = value.trim()
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("appointments")
+      .update({ vet_notes: text || null })
+      .eq("id", id)
+    if (error) {
+      setApptNoteStatus((prev) => ({ ...prev, [id]: "idle" }))
+      return
+    }
+    setAppointments((prev) =>
+      prev.map((a) => a.id === id ? { ...a, vet_notes: text || null } : a)
+    )
+    setApptNoteStatus((prev) => ({ ...prev, [id]: "saved" }))
+    if (savedHideRefs.current[id]) clearTimeout(savedHideRefs.current[id])
+    savedHideRefs.current[id] = setTimeout(() => {
+      setApptNoteStatus((prev) => ({ ...prev, [id]: "idle" }))
+    }, 1800)
+  }, [])
+
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedApptId((prev) => (prev === id ? null : id))
+    setApptNotesDraft((prev) => {
+      if (id in prev) return prev
+      const existing = appointments.find((a) => a.id === id)
+      return { ...prev, [id]: existing?.vet_notes ?? "" }
+    })
+  }, [appointments])
+
+  const handleNoteDraftChange = useCallback((id: string, value: string) => {
+    setApptNotesDraft((prev) => ({ ...prev, [id]: value }))
+    setApptNoteStatus((prev) => ({ ...prev, [id]: "saving" }))
+    if (debounceRefs.current[id]) clearTimeout(debounceRefs.current[id])
+    debounceRefs.current[id] = setTimeout(() => { saveApptNote(id, value) }, 600)
+  }, [saveApptNote])
+
+  // Collapse the expanded row when switching to a different day
+  useEffect(() => {
+    setExpandedApptId(null)
+  }, [selectedDate])
+
+  // Flush pending debounces on unmount
+  useEffect(() => {
+    const debounces = debounceRefs.current
+    const hides     = savedHideRefs.current
+    return () => {
+      for (const t of Object.values(debounces)) clearTimeout(t)
+      for (const t of Object.values(hides))     clearTimeout(t)
     }
   }, [])
 
@@ -333,6 +525,63 @@ export default function DashboardPage() {
     }
     loadMonthCounts()
   }, [clinicId, viewYear, viewMonth])
+
+  // Load pet reminders (vaccines + controls) for the viewed month.
+  // RLS pets_vet restricts this to pets of connected owners.
+  useEffect(() => {
+    if (!clinicId) return
+    async function loadMonthReminders() {
+      const supabase = createClient()
+      const monthStart = dayKeyFromLocal(new Date(viewYear, viewMonth, 1))
+      const monthEnd   = dayKeyFromLocal(new Date(viewYear, viewMonth + 1, 0))
+
+      const { data: connRows } = await supabase
+        .from("connections").select("owner_id")
+        .eq("clinic_id", clinicId)
+      const ownerIds = [...new Set((connRows ?? []).map((c) => c.owner_id))]
+      if (ownerIds.length === 0) { setMonthReminders([]); return }
+
+      const { data: petRows } = await supabase
+        .from("pets")
+        .select("id, owner_id, name, species, photo_url, next_vaccine_date, next_control_date")
+        .in("owner_id", ownerIds)
+        .or(
+          `and(next_vaccine_date.gte.${monthStart},next_vaccine_date.lte.${monthEnd}),` +
+          `and(next_control_date.gte.${monthStart},next_control_date.lte.${monthEnd})`
+        )
+
+      const reminders: VetReminder[] = []
+      for (const p of (petRows ?? [])) {
+        if (p.next_vaccine_date && p.next_vaccine_date >= monthStart && p.next_vaccine_date <= monthEnd) {
+          reminders.push({
+            petId: p.id, ownerId: p.owner_id, petName: p.name,
+            petSpecies: p.species as Species, petPhotoUrl: p.photo_url,
+            type: "vaccine", date: p.next_vaccine_date,
+          })
+        }
+        if (p.next_control_date && p.next_control_date >= monthStart && p.next_control_date <= monthEnd) {
+          reminders.push({
+            petId: p.id, ownerId: p.owner_id, petName: p.name,
+            petSpecies: p.species as Species, petPhotoUrl: p.photo_url,
+            type: "control", date: p.next_control_date,
+          })
+        }
+      }
+      setMonthReminders(reminders)
+    }
+    loadMonthReminders()
+  }, [clinicId, viewYear, viewMonth])
+
+  const remindersByKey = useMemo(() => {
+    const m: Record<string, VetReminder[]> = {}
+    for (const r of monthReminders) {
+      ;(m[r.date] ??= []).push(r)
+    }
+    return m
+  }, [monthReminders])
+
+  const selectedDayKey    = dayKeyFromLocal(selectedDate)
+  const selectedReminders = remindersByKey[selectedDayKey] ?? []
 
   // Load planned revenue for the viewed month: sum services.price_rsd
   // over non-cancelled / non-no-show appointments.
@@ -512,6 +761,7 @@ export default function DashboardPage() {
             const isSelected  = isSameDay(day, selectedDate)
             const isDayToday  = isSameDay(day, new Date())
             const dotCount    = monthDotCounts[day.toDateString()] ?? 0
+            const hasReminder = (remindersByKey[dayKeyFromLocal(day)] ?? []).length > 0
             const isWeekend   = day.getDay() === 0 || day.getDay() === 6
             return (
               <button
@@ -548,17 +798,15 @@ export default function DashboardPage() {
                     <div
                       style={{
                         width: 4, height: 4, borderRadius: "50%",
-                        background: isSelected ? "var(--brand)" : "var(--brand)",
-                        opacity: isSelected ? 0.6 : 1,
+                        background: isSelected ? "rgba(255,255,255,0.95)" : "var(--blue)",
                       }}
                     />
                   )}
-                  {dotCount >= 4 && (
+                  {hasReminder && (
                     <div
                       style={{
                         width: 4, height: 4, borderRadius: "50%",
-                        background: isSelected ? "var(--brand)" : "var(--brand)",
-                        opacity: isSelected ? 0.6 : 1,
+                        background: isSelected ? "rgba(255,255,255,0.95)" : "var(--amber)",
                       }}
                     />
                   )}
@@ -566,7 +814,7 @@ export default function DashboardPage() {
                     <div
                       style={{
                         width: 4, height: 4, borderRadius: "50%",
-                        background: "var(--text-muted)",
+                        background: isSelected ? "rgba(255,255,255,0.75)" : "var(--text-muted)",
                         opacity: 0.6,
                       }}
                     />
@@ -575,6 +823,21 @@ export default function DashboardPage() {
               </button>
             )
           })}
+        </div>
+
+        {/* Dot legend */}
+        <div
+          className="flex items-center justify-center gap-3 flex-wrap mt-3 pt-3"
+          style={{ borderTop: "1px solid var(--border)" }}
+        >
+          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--blue)" }} />
+            Termin
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--amber)" }} />
+            Podsetnik
+          </span>
         </div>
       </motion.div>
 
@@ -597,78 +860,164 @@ export default function DashboardPage() {
           value={revenueValue}
           iconClass="icon-green"
           sublineStat={revenueSubline}
-          hint="Ne uračunava otkaze i doplate."
+          hint="Ne uračunava otkazane termine."
         />
 
       </div>
 
-      {/* Schedule — full width */}
-      <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden">
+      {/* Day detail — Schedule + Podsetnici side-by-side on desktop */}
+      <div className={`grid grid-cols-1 gap-4 lg:gap-5 ${selectedReminders.length > 0 ? "lg:grid-cols-2" : ""} items-start`}>
 
-        {/* Card header */}
-        <div
-          className="flex items-center justify-between px-5 py-4"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
-          <div>
-            <h3 className="text-sm" style={{ fontWeight: 700 }}>
-              {isToday ? "Raspored za danas" : `Raspored — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
-            </h3>
+        {/* Schedule card */}
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
+
+          {/* Card header */}
+          <div
+            className="flex items-center justify-between gap-3 px-5 py-4"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="icon-sm icon-blue shrink-0">
+                <CalendarDays size={13} strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
+                  {isToday ? "Raspored za danas" : `Raspored — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                </h3>
+                {!loading && appointments.length > 0 && (
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {appointments.length} {appointments.length === 1 ? "termin" : "termina"}
+                  </p>
+                )}
+              </div>
+            </div>
             {!loading && appointments.length > 0 && (
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {appointments.length} {appointments.length === 1 ? "termin" : "termina"}
-              </p>
+              <span className="badge badge-blue shrink-0">
+                <CalendarDays size={11} strokeWidth={2} />
+                {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
+              </span>
             )}
           </div>
-          {!loading && appointments.length > 0 && (
-            <span className={`badge ${isToday ? "badge-brand" : "badge-blue"}`}>
-              <CalendarDays size={11} strokeWidth={2} />
-              {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
-            </span>
-          )}
-        </div>
 
-        {/* Card body */}
-        <div className="p-4">
-          {noShowError && (
-            <div
-              className="rounded-xl px-4 py-3 mb-3 text-sm"
-              style={{ background: "var(--red-tint)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.18)" }}
-            >
-              {noShowError}
-            </div>
-          )}
-          {loading ? (
-            <div className="space-y-2.5 py-1">
-              {[...Array(3)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-14 rounded-xl animate-pulse"
-                  style={{ background: "var(--surface-raised)" }}
-                />
-              ))}
-            </div>
-          ) : appointments.length === 0 ? (
-            <div className="py-14 text-center">
-              <div className="icon-lg icon-blue mx-auto mb-4">
-                <CalendarDays size={22} strokeWidth={1.75} />
+          {/* Card body */}
+          <div className="p-4">
+            {noShowError && (
+              <div
+                className="rounded-xl px-4 py-3 mb-3 text-sm"
+                style={{ background: "var(--red-tint)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.18)" }}
+              >
+                {noShowError}
               </div>
-              <p className="text-sm mb-1" style={{ fontWeight: 600 }}>
-                {isToday ? "Nema zakazivanja za danas" : "Nema zakazivanja za ovaj dan"}
-              </p>
-              <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
-                Vlasnici mogu zakazati termin sami — bez telefonskog poziva.
-              </p>
+            )}
+            {loading ? (
+              <div className="space-y-2.5 py-1">
+                {[...Array(3)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-14 rounded-xl animate-pulse"
+                    style={{ background: "var(--surface-raised)" }}
+                  />
+                ))}
+              </div>
+            ) : appointments.length === 0 ? (
+              <div className="py-14 text-center">
+                <div className="icon-lg icon-blue mx-auto mb-4">
+                  <CalendarDays size={22} strokeWidth={1.75} />
+                </div>
+                <p className="text-sm mb-1" style={{ fontWeight: 600 }}>
+                  {isToday ? "Nema zakazivanja za danas" : "Nema zakazivanja za ovaj dan"}
+                </p>
+                <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
+                  Vlasnici mogu zakazati termin sami — bez telefonskog poziva.
+                </p>
+              </div>
+            ) : (
+              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
+                {appointments.map((a) => (
+                  <AppointmentRow
+                    key={a.id}
+                    appt={a}
+                    isToday={isToday}
+                    onNoShow={handleNoShow}
+                    isExpanded={expandedApptId === a.id}
+                    onToggleExpand={handleToggleExpand}
+                    noteDraft={apptNotesDraft[a.id] ?? a.vet_notes ?? ""}
+                    onNoteDraftChange={handleNoteDraftChange}
+                    noteStatus={apptNoteStatus[a.id] ?? "idle"}
+                  />
+                ))}
+              </motion.div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Podsetnici card — vaccines & controls for the selected day */}
+        {selectedReminders.length > 0 && (
+          <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
+
+            {/* Card header */}
+            <div
+              className="flex items-center justify-between gap-3 px-5 py-4"
+              style={{ borderBottom: "1px solid var(--border)" }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="icon-sm icon-amber shrink-0">
+                  <Sparkles size={13} strokeWidth={2.25} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
+                    {isToday
+                      ? "Podsetnici za danas"
+                      : `Podsetnici — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    {selectedReminders.length} {selectedReminders.length === 1 ? "podsetnik" : "podsetnika"}
+                  </p>
+                </div>
+              </div>
+              <span className="badge badge-amber shrink-0">
+                <Sparkles size={11} strokeWidth={2} />
+                {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
+              </span>
             </div>
-          ) : (
-            <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
-              {appointments.map((a, i) => (
-                <AppointmentRow key={a.id} appt={a} index={i} isToday={isToday} onNoShow={handleNoShow} />
-              ))}
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
+
+            {/* Card body */}
+            <div className="p-4">
+              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
+                {selectedReminders.map((r) => (
+                  <motion.div
+                    key={`${r.petId}-${r.type}`}
+                    variants={stagger.row}
+                    className="appt-row flex items-center gap-4 rounded-xl px-4 py-3"
+                  >
+                    <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={32} />
+                    <div
+                      className="w-px self-stretch rounded-full shrink-0"
+                      style={{ background: "var(--border)" }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm leading-snug truncate" style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        {r.petName}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                      </p>
+                    </div>
+                    <span className="badge badge-amber shrink-0" style={{ gap: 4 }}>
+                      {r.type === "vaccine"
+                        ? <Syringe size={10} strokeWidth={2.5} />
+                        : <Stethoscope size={10} strokeWidth={2.5} />
+                      }
+                      {formatDateNumeric(r.date)}
+                    </span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+
+      </div>
     </motion.div>
   )
 }

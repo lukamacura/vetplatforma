@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Plus, CheckCircle2, Circle, Scissors, Clock, Banknote, Timer } from "lucide-react"
+import { Plus, CheckCircle2, Circle, Scissors, Clock, Timer } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
@@ -25,65 +25,83 @@ function ServiceRow({ service, onToggle, onClick }: {
     <motion.div
       variants={stagger.row}
       onClick={onClick}
-      className="flex items-center gap-3 rounded-xl px-4 py-3.5 cursor-pointer transition-all"
+      className="rounded-xl p-3 sm:px-4 sm:py-3.5 cursor-pointer transition-all active:scale-[0.995]"
       style={{
         background: "var(--surface-raised)",
         border:     "1px solid var(--border)",
-        opacity:    service.is_active ? 1 : 0.55,
+        opacity:    service.is_active ? 1 : 0.6,
       }}
       whileHover={{ y: -1, boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
     >
-      <div className={`icon-sm ${service.is_active ? "icon-brand" : "icon-muted"} shrink-0`}>
-        <Scissors size={13} strokeWidth={2.25} />
-      </div>
+      {/* Identity row — icon + name + price (price is the hero metric) */}
+      <div className="flex items-start gap-3">
+        <div className={`icon-sm ${service.is_active ? "icon-brand" : "icon-muted"} shrink-0`}>
+          <Scissors size={13} strokeWidth={2.25} />
+        </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-600 truncate" style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-          {service.name}
-        </p>
-        {service.description && (
-          <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {service.description}
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[15px] sm:text-sm font-semibold leading-tight truncate"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {service.name}
           </p>
-        )}
+          {service.description && (
+            <p
+              className="text-xs truncate mt-1 sm:mt-0.5"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {service.description}
+            </p>
+          )}
+        </div>
+
+        {/* Price — hero value, brand teal so it reads distinct from green "Aktivno" */}
+        <div
+          className="shrink-0 text-right tabular-nums text-[15px] sm:text-sm font-bold leading-tight"
+          style={{ color: "var(--brand)" }}
+        >
+          {formatPrice(service.price_rsd)}
+        </div>
       </div>
 
-      <span className="badge badge-blue shrink-0" style={{ gap: 4 }}>
-        <Clock size={10} strokeWidth={2.5} />
-        {service.duration_minutes} min
-      </span>
+      {/* Meta row — duration / buffer / toggle. Wraps on mobile, inline on desktop */}
+      <div className="mt-3 sm:mt-2.5 flex items-center justify-between gap-2 pl-[40px]">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span className="badge badge-blue" style={{ gap: 4 }}>
+            <Clock size={10} strokeWidth={2.5} />
+            {service.duration_minutes} min
+          </span>
 
-      <span className="badge badge-green shrink-0" style={{ gap: 4 }}>
-        <Banknote size={10} strokeWidth={2.5} />
-        {formatPrice(service.price_rsd)}
-      </span>
+          {service.buffer_after_minutes > 0 && (
+            <span className="badge badge-muted" style={{ gap: 4 }}>
+              <Timer size={10} strokeWidth={2.5} />
+              +{service.buffer_after_minutes}m
+            </span>
+          )}
+        </div>
 
-      {service.buffer_after_minutes > 0 && (
-        <span className="badge badge-amber shrink-0" style={{ gap: 4 }}>
-          <Timer size={10} strokeWidth={2.5} />
-          +{service.buffer_after_minutes}m
-        </span>
-      )}
-
-      <motion.button
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.96 }}
-        onClick={onToggle}
-        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs shrink-0 transition-all"
-        style={{
-          background:  service.is_active ? "var(--green-tint)" : "var(--surface-raised)",
-          color:       service.is_active ? "var(--green)"      : "var(--text-muted)",
-          border:      `1px solid ${service.is_active ? "rgba(22,163,74,0.25)" : "var(--border)"}`,
-          fontWeight:  600,
-          minWidth:    100,
-        }}
-        title={service.is_active ? "Klikni da deaktiviraš" : "Klikni da aktiviraš"}
-      >
-        {service.is_active
-          ? <><CheckCircle2 size={13} strokeWidth={2.25} /> Aktivno</>
-          : <><Circle       size={13} strokeWidth={1.75} /> Neaktivno</>
-        }
-      </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.04 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={onToggle}
+          className="flex items-center justify-center gap-1.5 rounded-lg px-3 text-xs shrink-0 transition-all"
+          style={{
+            background:  service.is_active ? "var(--green-tint)" : "var(--surface)",
+            color:       service.is_active ? "var(--green)"      : "var(--text-muted)",
+            border:      `1px solid ${service.is_active ? "rgba(22,163,74,0.25)" : "var(--border)"}`,
+            fontWeight:  600,
+            minHeight:   32,
+            minWidth:    96,
+          }}
+          title={service.is_active ? "Klikni da deaktiviraš" : "Klikni da aktiviraš"}
+        >
+          {service.is_active
+            ? <><CheckCircle2 size={13} strokeWidth={2.25} /> Aktivno</>
+            : <><Circle       size={13} strokeWidth={1.75} /> Neaktivno</>
+          }
+        </motion.button>
+      </div>
     </motion.div>
   )
 }
@@ -213,14 +231,17 @@ export default function ServicesPage() {
       variants={stagger.container}
       initial="hidden"
       animate="visible"
-      className="max-w-4xl mx-auto space-y-6"
+      className="max-w-4xl mx-auto space-y-5 sm:space-y-6"
     >
 
-      {/* Header */}
-      <motion.div variants={stagger.item} className="flex justify-between items-start gap-4">
+      {/* Header — stacked on mobile (full-width CTA), side-by-side on desktop */}
+      <motion.div
+        variants={stagger.item}
+        className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4"
+      >
 
-        <div>
-          <h1 className="text-2xl">Upravljanje uslugama</h1>
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl">Upravljanje uslugama</h1>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {!loading && (
               <>
@@ -239,10 +260,14 @@ export default function ServicesPage() {
           </div>
         </div>
 
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          className="w-full sm:w-auto"
+        >
           <Button
             onClick={openCreate}
-            className="btn-primary gap-2 font-600 shrink-0"
+            className="btn-primary gap-2 font-600 w-full sm:w-auto"
             style={{ fontWeight: 600 }}
           >
             <Plus size={16} strokeWidth={2.5} />
@@ -259,92 +284,108 @@ export default function ServicesPage() {
               {editingService ? "Izmeni uslugu" : "Dodaj novu uslugu"}
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
+          <div className="grid gap-4 py-3 sm:py-4">
+            <div className="grid gap-1.5">
               <Label htmlFor="svc-name">Naziv usluge</Label>
               <Input
                 id="svc-name"
                 placeholder="npr. Godišnja vakcinacija"
-                value={formName}
+                value={formName ?? ""}
                 onChange={(e) => setFormName(e.target.value)}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="svc-duration">Trajanje (minuti)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="svc-duration"
-                  type="number"
-                  min={5}
-                  max={480}
-                  step={5}
-                  placeholder="30"
-                  value={formDuration}
-                  onChange={(e) => {
-                    const dur = Math.max(5, parseInt(e.target.value, 10) || 5)
-                    setFormDuration(dur)
-                    if (!editingService) setFormBuffer(suggestBuffer(dur))
-                  }}
-                  className="flex-1"
-                />
-                <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>min</span>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="svc-duration">Trajanje</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="svc-duration"
+                    type="number"
+                    inputMode="numeric"
+                    min={5}
+                    max={480}
+                    step={5}
+                    placeholder="30"
+                    value={Number.isFinite(formDuration) ? formDuration : ""}
+                    onChange={(e) => {
+                      const dur = Math.max(5, parseInt(e.target.value, 10) || 5)
+                      setFormDuration(dur)
+                      if (!editingService) setFormBuffer(suggestBuffer(dur))
+                    }}
+                    className="flex-1"
+                  />
+                  <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>min</span>
+                </div>
               </div>
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Od 5 do 480 minuta
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="svc-price">Cena u RSD</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="svc-price"
-                  type="number"
-                  min={0}
-                  step={100}
-                  placeholder="npr. 3000"
-                  value={formPrice}
-                  onChange={(e) => setFormPrice(e.target.value)}
-                  className="flex-1"
-                  required
-                />
-                <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>RSD</span>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor="svc-price" style={{ color: "var(--brand)" }}>Cena</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="svc-price"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={100}
+                    placeholder="3000"
+                    value={formPrice ?? ""}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                    className="flex-1 font-semibold"
+                    style={{ color: "var(--brand)" }}
+                    required
+                  />
+                  <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>RSD</span>
+                </div>
               </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="svc-buffer">Pauza nakon usluge (minuti)</Label>
+            <p className="text-xs -mt-2" style={{ color: "var(--text-muted)" }}>
+              Trajanje od 5 do 480 minuta. Izmene važe samo za nove termine — već zakazani termini zadržavaju trajanje sa trenutka rezervacije.
+            </p>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="svc-buffer">Pauza nakon usluge</Label>
               <div className="flex items-center gap-2">
                 <Input
                   id="svc-buffer"
                   type="number"
+                  inputMode="numeric"
                   min={0}
                   max={60}
                   step={5}
-                  value={formBuffer}
+                  value={Number.isFinite(formBuffer) ? formBuffer : ""}
                   onChange={(e) => setFormBuffer(Math.max(0, Math.min(60, parseInt(e.target.value, 10) || 0)))}
                   className="flex-1"
                 />
                 <span className="text-sm shrink-0" style={{ color: "var(--text-muted)" }}>min</span>
               </div>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Vreme za čišćenje/pripremu pre sledećeg termina. Preporučeno: {suggestBuffer(formDuration)} min
+                Vreme za čišćenje/pripremu. Preporučeno: {suggestBuffer(formDuration)} min
               </p>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="svc-desc">Opis (opcionalno)</Label>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="svc-desc">Opis <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opcionalno)</span></Label>
               <Input
                 id="svc-desc"
                 placeholder="Kratak opis usluge..."
-                value={formDescription}
+                value={formDescription ?? ""}
                 onChange={(e) => setFormDescription(e.target.value)}
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => handleDialogChange(false)}>Otkaži</Button>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleDialogChange(false)}
+              className="w-full sm:w-auto"
+            >
+              Otkaži
+            </Button>
             <Button
               onClick={handleSave}
               disabled={saving || !isFormValid}
-              className="text-white"
+              className="text-white w-full sm:w-auto"
               style={{ background: "var(--brand)", border: "none" }}
             >
               {saving ? "Čuvanje..." : "Sačuvaj"}
@@ -357,27 +398,27 @@ export default function ServicesPage() {
       <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden">
 
         <div
-          className="flex items-center justify-between px-5 py-4"
+          className="flex items-center justify-between px-4 py-3 sm:px-5 sm:py-4"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-600" style={{ fontWeight: 600 }}>Katalog usluga</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Kliknite na uslugu da biste je izmenili.
+              Dodirnite uslugu da biste je izmenili.
             </p>
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-3 sm:p-4">
           {loading ? (
             <div className="space-y-2.5">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-14 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+                <div key={i} className="h-[84px] sm:h-14 rounded-xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
               ))}
             </div>
           ) : services.length === 0 ? (
-            <div className="py-14 text-center">
-              <div className="icon-lg icon-brand mx-auto mb-4">
+            <div className="py-10 sm:py-14 text-center px-4">
+              <div className="icon-lg icon-brand mx-auto mb-3 sm:mb-4">
                 <Scissors size={20} strokeWidth={1.75} />
               </div>
               <p className="font-600 text-sm mb-1" style={{ fontWeight: 600 }}>Još nema usluga</p>

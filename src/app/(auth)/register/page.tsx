@@ -1,13 +1,14 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { PawPrint } from "lucide-react"
+import { PawPrint, Building2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
 
 function RegisterForm() {
   const router = useRouter()
@@ -18,10 +19,19 @@ function RegisterForm() {
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
   const [clinicName, setClinicName] = useState("")
+  const [inviteClinicName, setInviteClinicName] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!clinicSlug) return
+    const supabase = createClient()
+    fetchClinicBySlug(supabase, clinicSlug).then((clinic) => {
+      if (clinic) setInviteClinicName(clinic.name)
+    })
+  }, [clinicSlug])
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
@@ -87,12 +97,11 @@ function RegisterForm() {
           phone: phone || null,
         })
 
-      // Owner — if coming from /join/[slug], redirect back there
       if (clinicSlug) {
-        router.push(`/join/${clinicSlug}`)
-      } else {
-        router.push("/klijent")
+        await connectOwnerToClinicBySlug(supabase, userId, clinicSlug)
       }
+
+      router.push("/klijent")
     }
 
     router.refresh()
@@ -109,8 +118,22 @@ function RegisterForm() {
           <CardDescription>Brza registracija — bez kartice</CardDescription>
         </CardHeader>
         <CardContent>
+          {clinicSlug && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#2BB5A0]/20 bg-[#2BB5A0]/5 p-3 text-sm text-[#239684]">
+              <Building2 className="h-4 w-4 mt-0.5 flex-none" />
+              <p>
+                {inviteClinicName ? (
+                  <>
+                    Registrujete se da biste postali digitalni klijent klinike{" "}
+                    <span className="font-semibold">{inviteClinicName}</span>. Povezaćemo vas automatski.
+                  </>
+                ) : (
+                  <>Registrujete se radi povezivanja sa klinikom. Povezaćemo vas automatski.</>
+                )}
+              </p>
+            </div>
+          )}
           <form onSubmit={handleRegister} className="space-y-4">
-            {/* Role toggle — hide if coming from /join (always owner) */}
             {!clinicSlug && (
               <div className="flex rounded-lg border p-1 gap-1">
                 <button
