@@ -240,7 +240,7 @@ export default function KlinikaDetailPage() {
       {hours.length > 0 && (
         <motion.div variants={stagger.item} className="space-y-3">
           <h2 className="text-sm px-1" style={{ fontWeight: 700 }}>Radno vreme</h2>
-          <div className="solid-card rounded-2xl divide-y" style={{ divideColor: "var(--border)" }}>
+          <div className="solid-card rounded-2xl divide-y divide-(--border)">
             {[1, 2, 3, 4, 5, 6, 0].map((day) => {
               const entry = hours.find((h) => h.weekday === day)
               const labels = ["Ned", "Pon", "Uto", "Sre", "Čet", "Pet", "Sub"]
