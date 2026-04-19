@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback, useTransition } from "react"
-import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2, Timer } from "lucide-react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2, Timer, ImageIcon, X } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,6 +58,9 @@ export default function PodesavanjaPage() {
   const [clinicSlug,          setClinicSlug]          = useState("")
   const [clinicName,          setClinicName]          = useState("")
   const [phone,               setPhone]               = useState("")
+  const [logoUrl,             setLogoUrl]             = useState("")
+  const [description,         setDescription]         = useState("")
+  const [address,             setAddress]             = useState("")
   const [hours,               setHours]               = useState<HoursRow[]>(DEFAULT_HOURS)
   const [bufferMinutes,       setBufferMinutes]       = useState<number>(10)
   const [subscriptionStatus,  setSubscriptionStatus]  = useState<string>("trial")
@@ -66,23 +69,34 @@ export default function PodesavanjaPage() {
   const [cancelAtPeriodEnd,   setCancelAtPeriodEnd]   = useState(false)
 
   type SaveStatus = "idle" | "saving" | "saved"
-  const [clinicStatus, setClinicStatus] = useState<SaveStatus>("idle")
-  const [phoneStatus,  setPhoneStatus]  = useState<SaveStatus>("idle")
-  const [bufferStatus, setBufferStatus] = useState<SaveStatus>("idle")
-  const [bufferError,  setBufferError]  = useState<string | null>(null)
-  const bufferSavedRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [savingHours,  setSavingHours]  = useState(false)
-  const [copied,       setCopied]       = useState(false)
-  const [loading,      setLoading]      = useState(true)
-  const [isPending,    startTransition]  = useTransition()
+  const [clinicStatus,   setClinicStatus]   = useState<SaveStatus>("idle")
+  const [phoneStatus,    setPhoneStatus]    = useState<SaveStatus>("idle")
+  const [profileStatus,  setProfileStatus]  = useState<SaveStatus>("idle")
+  const [bufferStatus,   setBufferStatus]   = useState<SaveStatus>("idle")
+  const [bufferError,    setBufferError]    = useState<string | null>(null)
+  const bufferSavedRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const profileSavedRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [savingHours,    setSavingHours]    = useState(false)
+  const [copied,         setCopied]         = useState(false)
+  const [loading,        setLoading]        = useState(true)
+  const [isPending,      startTransition]   = useTransition()
 
   const [hoursMsg,  setHoursMsg]  = useState<string | null>(null)
 
   // Debounce + "Sačuvano" auto-hide timers for inline auto-save
-  const clinicDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clinicSavedRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const phoneDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const phoneSavedRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clinicDebounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clinicSavedRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const phoneDebounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const phoneSavedRef       = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Refs for debounced profile save
+  const descriptionRef      = useRef("")
+  const addressRef          = useRef("")
+  const profileDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Logo upload
+  const fileInputRef    = useRef<HTMLInputElement>(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   // Don't save while initial data is still loading into the inputs
   const loadedRef = useRef(false)
@@ -109,10 +123,13 @@ export default function PodesavanjaPage() {
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id, phone").eq("id", user.id).single()
 
-      function applyClinic(c: { name: string; slug: string; buffer_minutes: number | null; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null; subscription_cancel_at_period_end: boolean | null }) {
+      function applyClinic(c: { name: string; slug: string; buffer_minutes: number | null; subscription_status: string | null; trial_started_at: string | null; subscription_current_period_end: string | null; stripe_customer_id: string | null; subscription_cancel_at_period_end: boolean | null; logo_url?: string | null; description?: string | null; address?: string | null }) {
         setClinicName(c.name)
         setClinicSlug(c.slug)
         setBufferMinutes(c.buffer_minutes ?? 10)
+        setLogoUrl(c.logo_url ?? "")
+        const desc = c.description ?? ""; setDescription(desc); descriptionRef.current = desc
+        const addr = c.address ?? ""; setAddress(addr); addressRef.current = addr
         let status = c.subscription_status ?? "trial"
         // Treat trial past 30 days as expired even before middleware persists it.
         if (status === "trial" && c.trial_started_at) {
@@ -139,11 +156,11 @@ export default function PodesavanjaPage() {
 
       let cid = profile?.clinic_id
       if (!cid) {
-        const { data: owned } = await supabase.from("clinics").select("id, name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("owner_id", user.id).single()
+        const { data: owned } = await supabase.from("clinics").select("id, name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end, logo_url, description, address").eq("owner_id", user.id).single()
         cid = owned?.id ?? null
         if (owned) applyClinic(owned)
       } else {
-        const { data: clinic } = await supabase.from("clinics").select("name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end").eq("id", cid).single()
+        const { data: clinic } = await supabase.from("clinics").select("name, slug, buffer_minutes, subscription_status, trial_started_at, subscription_current_period_end, stripe_customer_id, subscription_cancel_at_period_end, logo_url, description, address").eq("id", cid).single()
         if (clinic) applyClinic(clinic)
       }
       setPhone(profile?.phone ?? "")
@@ -179,6 +196,8 @@ export default function PodesavanjaPage() {
       if (phoneDebounceRef.current)  clearTimeout(phoneDebounceRef.current)
       if (phoneSavedRef.current)     clearTimeout(phoneSavedRef.current)
       if (bufferSavedRef.current)    clearTimeout(bufferSavedRef.current)
+      if (profileSavedRef.current)   clearTimeout(profileSavedRef.current)
+      if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current)
     }
   }, [])
 
@@ -192,6 +211,40 @@ export default function PodesavanjaPage() {
     setClinicStatus("saved")
     if (clinicSavedRef.current) clearTimeout(clinicSavedRef.current)
     clinicSavedRef.current = setTimeout(() => setClinicStatus("idle"), 1800)
+  }, [clinicId])
+
+  const saveProfileFields = useCallback(async () => {
+    if (!clinicId) return
+    const supabase = createClient()
+    const { error } = await supabase.from("clinics").update({
+      description: descriptionRef.current.trim() || null,
+      address:     addressRef.current.trim()     || null,
+    }).eq("id", clinicId)
+    if (error) { setProfileStatus("idle"); return }
+    setProfileStatus("saved")
+    if (profileSavedRef.current) clearTimeout(profileSavedRef.current)
+    profileSavedRef.current = setTimeout(() => setProfileStatus("idle"), 1800)
+  }, [clinicId])
+
+  const handleLogoUpload = useCallback(async (file: File) => {
+    if (!clinicId) return
+    setUploadingLogo(true)
+    const ext = file.name.split(".").pop() ?? "jpg"
+    const path = `${clinicId}.${ext}`
+    const supabase = createClient()
+    const { error } = await supabase.storage.from("clinic-logos").upload(path, file, { upsert: true })
+    if (error) { setUploadingLogo(false); return }
+    const { data: { publicUrl } } = supabase.storage.from("clinic-logos").getPublicUrl(path)
+    await supabase.from("clinics").update({ logo_url: publicUrl }).eq("id", clinicId)
+    setLogoUrl(publicUrl)
+    setUploadingLogo(false)
+  }, [clinicId])
+
+  const handleRemoveLogo = useCallback(async () => {
+    if (!clinicId) return
+    const supabase = createClient()
+    await supabase.from("clinics").update({ logo_url: null }).eq("id", clinicId)
+    setLogoUrl("")
   }, [clinicId])
 
   const savePhone = useCallback(async (value: string) => {
@@ -252,6 +305,18 @@ export default function PodesavanjaPage() {
     if (phoneDebounceRef.current) clearTimeout(phoneDebounceRef.current)
     phoneDebounceRef.current = setTimeout(() => { savePhone(value) }, 600)
   }, [savePhone])
+
+  const handleProfileFieldChange = useCallback((
+    field: "description" | "address",
+    value: string,
+  ) => {
+    if (field === "description") { setDescription(value); descriptionRef.current = value }
+    if (field === "address")     { setAddress(value);     addressRef.current     = value }
+    if (!loadedRef.current) return
+    setProfileStatus("saving")
+    if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current)
+    profileDebounceRef.current = setTimeout(saveProfileFields, 600)
+  }, [saveProfileFields])
 
   async function handleSaveHours(e: React.FormEvent) {
     e.preventDefault()
@@ -477,6 +542,116 @@ export default function PodesavanjaPage() {
         </motion.div>
       </div>
 
+      {/* ── Clinic profile fields — full width ── */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <div>
+            <h2 className="text-sm" style={{ fontWeight: 700 }}>Profil klinike</h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              Prikazuje se vlasnicima ljubimaca.
+            </p>
+          </div>
+          <SaveIndicator status={profileStatus} />
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Logo klinike</Label>
+            <div className="flex items-center gap-4">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt="Logo klinike"
+                  width={64}
+                  height={64}
+                  className="rounded-full object-cover shrink-0"
+                  style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
+                />
+              ) : (
+                <div
+                  className="icon-lg icon-muted shrink-0"
+                  style={{ width: 64, height: 64, borderRadius: "50%" }}
+                >
+                  <ImageIcon size={22} strokeWidth={1.75} />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingLogo || !clinicId}
+                  className="rounded-xl px-4 py-2 text-sm transition-all"
+                  style={{
+                    background: "var(--brand-tint)",
+                    color:      "var(--brand)",
+                    border:     "1px solid rgba(43,181,160,0.25)",
+                    fontWeight: 600,
+                    opacity:    (uploadingLogo || !clinicId) ? 0.6 : 1,
+                    cursor:     (uploadingLogo || !clinicId) ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {uploadingLogo ? "Otpremanje..." : logoUrl ? "Promeni" : "Otpremi logo"}
+                </button>
+                {logoUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="icon-sm transition-all"
+                    style={{ background: "var(--red-tint)", color: "var(--red)", border: "1px solid rgba(220,38,38,0.15)" }}
+                    aria-label="Ukloni logo"
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleLogoUpload(file)
+                e.target.value = ""
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="clinic-description">O klinici</Label>
+              <span className="text-[11px]" style={{ color: description.length > 480 ? "var(--amber)" : "var(--text-muted)" }}>
+                {description.length}/500
+              </span>
+            </div>
+            <textarea
+              id="clinic-description"
+              value={description}
+              onChange={(e) => handleProfileFieldChange("description", e.target.value)}
+              maxLength={500}
+              rows={4}
+              placeholder="Kratki opis klinike, specijalizacija, iskustvo..."
+              className="w-full rounded-xl px-4 py-3 text-sm resize-none"
+              style={{
+                background:  "var(--surface-raised)",
+                border:      "1px solid var(--border)",
+                color:       "var(--text-primary)",
+                outline:     "none",
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="clinic-address">Adresa klinike</Label>
+            <Input
+              id="clinic-address"
+              value={address}
+              onChange={(e) => handleProfileFieldChange("address", e.target.value)}
+              placeholder="npr. Bulevar oslobođenja 12, Novi Sad"
+            />
+          </div>
+        </div>
+      </motion.div>
+
       {/* ── Invite link — full width ── */}
       <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
         <div className="flex items-start justify-between gap-6 flex-wrap">
@@ -632,11 +807,12 @@ export default function PodesavanjaPage() {
                       onClick={() => updateHoursRow(index, { is_closed: !row.is_closed })}
                       className="rounded-lg px-3 py-1.5 text-xs transition-all"
                       style={{
-                        background:  row.is_closed ? "var(--surface)" : "var(--brand-tint)",
-                        color:       row.is_closed ? "var(--text-muted)" : "var(--brand)",
-                        border:      `1px solid ${row.is_closed ? "var(--border)" : "rgba(43,181,160,0.25)"}`,
+                        background:  row.is_closed ? "rgba(220,38,38,0.08)" : "var(--brand-tint)",
+                        color:       row.is_closed ? "var(--red)" : "var(--brand)",
+                        border:      `1px solid ${row.is_closed ? "rgba(220,38,38,0.25)" : "rgba(43,181,160,0.25)"}`,
                         fontWeight:  600,
                         minWidth:    96,
+                        cursor:      "pointer",
                       }}
                     >
                       {row.is_closed ? "Zatvoreno" : "Otvoreno"}

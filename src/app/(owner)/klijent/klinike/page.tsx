@@ -1,15 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Search, Building2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import Link from "next/link"
+import { Search, Building2, PawPrint, Check, MapPin } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
-import type { Clinic } from "@/lib/types"
+
+type ClinicRow = {
+  id: string
+  name: string
+  description: string | null
+  address: string | null
+  logo_url: string | null
+}
 
 export default function KlinikePage() {
-  const [clinics, setClinics] = useState<Clinic[]>([])
+  const [clinics, setClinics] = useState<ClinicRow[]>([])
   const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState("")
   const [busyClinicId, setBusyClinicId] = useState<string | null>(null)
@@ -24,46 +30,41 @@ export default function KlinikePage() {
       setUserId(user.id)
 
       const [{ data: clinicsData }, { data: connsData }] = await Promise.all([
-        supabase.from("clinics").select("*").order("name"),
+        supabase.from("clinics").select("id, name, description, address, logo_url").order("name"),
         supabase.from("connections").select("clinic_id").eq("owner_id", user.id),
       ])
 
-      setClinics((clinicsData as Clinic[]) ?? [])
+      setClinics((clinicsData as ClinicRow[]) ?? [])
       setConnectedIds(new Set((connsData ?? []).map((c) => c.clinic_id)))
       setLoading(false)
     }
     load()
   }, [])
 
-  async function handleConnect(clinicId: string) {
+  async function handleConnect(e: React.MouseEvent, clinicId: string) {
+    e.preventDefault()
     if (!userId) return
     setBusyClinicId(clinicId)
     const supabase = createClient()
-    const { error } = await supabase
-      .from("connections")
-      .upsert({ owner_id: userId, clinic_id: clinicId }, { onConflict: "owner_id,clinic_id" })
-    if (!error) {
-      setConnectedIds((prev) => new Set([...prev, clinicId]))
-    }
+    await supabase.from("connections").upsert(
+      { owner_id: userId, clinic_id: clinicId },
+      { onConflict: "owner_id,clinic_id" },
+    )
+    setConnectedIds((prev) => new Set([...prev, clinicId]))
     setBusyClinicId(null)
   }
 
-  async function handleDisconnect(clinicId: string) {
+  async function handleDisconnect(e: React.MouseEvent, clinicId: string) {
+    e.preventDefault()
     if (!userId) return
     setBusyClinicId(clinicId)
     const supabase = createClient()
-    const { error } = await supabase
-      .from("connections")
-      .delete()
-      .eq("owner_id", userId)
-      .eq("clinic_id", clinicId)
-    if (!error) {
-      setConnectedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(clinicId)
-        return next
-      })
-    }
+    await supabase.from("connections").delete().eq("owner_id", userId).eq("clinic_id", clinicId)
+    setConnectedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(clinicId)
+      return next
+    })
     setBusyClinicId(null)
   }
 
@@ -72,72 +73,138 @@ export default function KlinikePage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">Klinike</h1>
-        <p className="text-muted-foreground text-sm">Pronađite svog veterinara i povežite se.</p>
+        <h1 className="text-2xl" style={{ fontWeight: 700, letterSpacing: "-0.03em" }}>Klinike</h1>
+        <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+          Pronađite svog veterinara i povežite se.
+        </p>
       </div>
 
       <div className="relative">
-        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Search
+          size={16}
+          strokeWidth={2}
+          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ color: "var(--text-muted)" }}
+        />
         <Input
           placeholder="Pretraži klinike..."
-          className="pl-8"
+          className="pl-9"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
       {loading ? (
-        <div className="py-20 text-center text-sm text-muted-foreground">Učitavanje...</div>
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-28 rounded-2xl animate-pulse" style={{ background: "var(--surface-raised)" }} />
+          ))}
+        </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center space-y-2">
-            <Building2 className="h-10 w-10 mx-auto text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              {clinics.length === 0
-                ? "Nema registrovanih klinika."
-                : "Nema rezultata pretrage."}
-            </p>
-          </CardContent>
-        </Card>
+        <div
+          className="rounded-2xl p-10 text-center"
+          style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+        >
+          <Building2 size={32} strokeWidth={1.5} className="mx-auto mb-3" style={{ color: "var(--text-muted)" }} />
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            {clinics.length === 0 ? "Nema registrovanih klinika." : "Nema rezultata pretrage."}
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((clinic) => {
             const isConnected = connectedIds.has(clinic.id)
+            const busy = busyClinicId === clinic.id
             return (
-              <div
-                key={clinic.id}
-                className="bg-white rounded-xl border p-4 flex items-center gap-4"
-              >
-                <div className="flex-none w-10 h-10 rounded-full bg-accent flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-(--brand)" />
+              <div key={clinic.id} className="relative solid-card rounded-2xl p-4 transition-all">
+                <Link
+                  href={`/klijent/klinike/${clinic.id}`}
+                  className="absolute inset-0 rounded-2xl"
+                  aria-label={clinic.name}
+                />
+
+                {/* Header row */}
+                <div className="flex items-start gap-3">
+                  {clinic.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={clinic.logo_url}
+                      alt={clinic.name}
+                      width={44}
+                      height={44}
+                      className="rounded-full object-cover shrink-0"
+                      style={{ width: 44, height: 44, border: "1px solid var(--border)" }}
+                    />
+                  ) : (
+                    <div className="icon-md icon-muted shrink-0" style={{ borderRadius: "50%" }}>
+                      <PawPrint size={16} strokeWidth={2} />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
+                      {isConnected && (
+                        <span className="inline-flex items-center gap-1 text-[11px] shrink-0" style={{ color: "var(--green)", fontWeight: 600 }}>
+                          <Check size={10} strokeWidth={3} />
+                          Povezani
+                        </span>
+                      )}
+                    </div>
+                    {clinic.address && (
+                      <span className="inline-flex items-center gap-1 mt-0.5 text-[11px]" style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                        <MapPin size={10} strokeWidth={2.5} />
+                        {clinic.address}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{clinic.name}</p>
-                </div>
-                {isConnected ? (
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => handleDisconnect(clinic.id)}
-                    disabled={busyClinicId === clinic.id}
-                  >
-                    {busyClinicId === clinic.id ? "..." : "Prekini vezu"}
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => handleConnect(clinic.id)}
-                    disabled={busyClinicId === clinic.id}
-                    className="btn-primary"
-                  >
-                    {busyClinicId === clinic.id ? "..." : "Poveži se"}
-                  </Button>
+
+                {/* Description */}
+                {clinic.description && (
+                  <p className="mt-3 text-xs" style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                    {clinic.description}
+                  </p>
                 )}
+
+                {/* Connect action */}
+                <div className="relative z-10 mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--border)" }}>
+                  {isConnected ? (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDisconnect(e, clinic.id)}
+                      disabled={busy}
+                      className="rounded-xl px-3 py-1.5 text-xs transition-all"
+                      style={{
+                        background: "var(--red-tint)",
+                        color: "var(--red)",
+                        border: "1px solid rgba(220,38,38,0.15)",
+                        fontWeight: 600,
+                        opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      {busy ? "..." : "Prekini vezu"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => handleConnect(e, clinic.id)}
+                      disabled={busy}
+                      className="rounded-xl px-3 py-1.5 text-xs transition-all"
+                      style={{
+                        background: "var(--brand-tint)",
+                        color: "var(--brand)",
+                        border: "1px solid rgba(43,181,160,0.25)",
+                        fontWeight: 600,
+                        opacity: busy ? 0.6 : 1,
+                      }}
+                    >
+                      {busy ? "..." : "Poveži se"}
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}

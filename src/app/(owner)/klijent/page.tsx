@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   PawPrint, CalendarDays, History, Syringe, Stethoscope,
   Clock, ChevronRight, Sparkles, AlertTriangle, ChevronDown,
-  NotebookIcon,
+  NotebookIcon, MapPin,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
@@ -79,6 +79,16 @@ type Reminder = {
   severity: "overdue" | "soon" | "ok"
 }
 
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type ClinicInfo = {
+  id: string
+  name: string
+  description: string | null
+  logo_url: string | null
+  address: string | null
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OwnerHomePage() {
@@ -87,6 +97,7 @@ export default function OwnerHomePage() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([])
   const [pastAppts, setPastAppts] = useState<AppointmentRow[]>([])
   const [ownerName, setOwnerName] = useState("")
+  const [clinic, setClinic] = useState<ClinicInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null)
   const [cancelling, setCancelling] = useState(false)
@@ -103,6 +114,22 @@ export default function OwnerHomePage() {
       const { data: profile } = await supabase
         .from("profiles").select("full_name").eq("id", user.id).single()
       setOwnerName(profile?.full_name ?? "")
+
+      const { data: conn } = await supabase
+        .from("connections")
+        .select("clinic_id")
+        .eq("owner_id", user.id)
+        .limit(1)
+        .single()
+
+      if (conn?.clinic_id) {
+        const { data: clinicData } = await supabase
+          .from("clinics")
+          .select("id, name, description, logo_url, address")
+          .eq("id", conn.clinic_id)
+          .single()
+        if (clinicData) setClinic(clinicData as ClinicInfo)
+      }
 
       const { data: petsData } = await supabase
         .from("pets")
@@ -200,8 +227,18 @@ export default function OwnerHomePage() {
     return items
   })
 
-  const urgentReminders = reminders.filter((r) => r.severity === "overdue" || r.severity === "soon")
+  // A pet with any upcoming confirmed appointment is considered "covered":
+  // its reminders are shown in a calm section rather than the alarm banner.
+  const bookedPetIds = new Set(Object.keys(nextApptMap))
+
+  const urgentReminders = reminders.filter(
+    (r) => (r.severity === "overdue" || r.severity === "soon") && !bookedPetIds.has(r.petId)
+  )
+  const coveredReminders = reminders.filter(
+    (r) => (r.severity === "overdue" || r.severity === "soon") && bookedPetIds.has(r.petId)
+  )
   const okReminders = reminders.filter((r) => r.severity === "ok")
+  const planReminders = reminders.filter((r) => !bookedPetIds.has(r.petId))
 
   if (loading) {
     return (
@@ -233,6 +270,49 @@ export default function OwnerHomePage() {
           Zdravstveni podaci i termini Vaših ljubimaca
         </p>
       </motion.div>
+
+      {/* ── Clinic card ── */}
+      {clinic && (
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-4">
+          <div className="flex items-center gap-3">
+            {clinic.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={clinic.logo_url}
+                alt={clinic.name}
+                width={64}
+                height={64}
+                className="rounded-full object-cover shrink-0"
+                style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
+              />
+            ) : (
+              <div className="icon-lg icon-brand shrink-0" style={{ width: 64, height: 64, borderRadius: "50%" }}>
+                <PawPrint size={26} strokeWidth={1.75} />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
+              {clinic.address && (
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(clinic.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs mt-0.5"
+                  style={{ color: "var(--brand)", fontWeight: 600 }}
+                >
+                  <MapPin size={11} strokeWidth={2.5} />
+                  Prikaži na mapi
+                </a>
+              )}
+            </div>
+          </div>
+          {clinic.description && (
+            <p className="text-sm mt-3" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
+              {clinic.description}
+            </p>
+          )}
+        </motion.div>
+      )}
 
       {/* ── Urgent reminders banner ── */}
       {urgentReminders.length > 0 && (
@@ -268,7 +348,7 @@ export default function OwnerHomePage() {
                     : "Uskoro ističe"}
                 </h2>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  Vakcinacije i pregledi koji uskoro ističu — još nisu zakazani.
+                  Vakcinacije i pregledi za koje još nije zakazan termin.
                 </p>
               </div>
             </div>
@@ -467,6 +547,67 @@ export default function OwnerHomePage() {
         )}
       </motion.div>
 
+      {/* ── Covered reminders (vaccine/control due, but appt already booked) ── */}
+      {coveredReminders.length > 0 && (
+        <motion.div variants={stagger.item}>
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background: "linear-gradient(135deg, var(--green-tint) 0%, #F0FDF4 100%)",
+              border: "1px solid rgba(22,163,74,0.18)",
+            }}
+          >
+            <div className="flex items-start gap-2 mb-3">
+              <div
+                className="icon-sm shrink-0"
+                style={{
+                  background: "rgba(22,163,74,0.12)",
+                  color: "var(--green)",
+                  borderRadius: 8,
+                }}
+              >
+                <Sparkles size={14} strokeWidth={2.25} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm" style={{ fontWeight: 700 }}>
+                  Podsetnici sa zakazanim terminom
+                </h2>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  Predstojeći termin obuhvata ove vakcinacije ili preglede.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {coveredReminders.map((r) => (
+                <div
+                  key={`covered-${r.petId}-${r.type}`}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+                  style={{
+                    background: "rgba(255,255,255,0.75)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={32} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>
+                      {r.petName}
+                    </p>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                    </p>
+                  </div>
+                  <span className="badge badge-green" style={{ gap: 4 }}>
+                    <CalendarDays size={10} strokeWidth={2.5} />
+                    {formatDateTimeNumericBelgrade(nextApptMap[r.petId])}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* ── Reminders (all clear / ok) ── */}
       {okReminders.length > 0 && urgentReminders.length === 0 && (
         <motion.div variants={stagger.item}>
@@ -550,17 +691,17 @@ export default function OwnerHomePage() {
         )}
       </motion.div>
 
-      {/* ── Plan za dalje (vakcine + kontrolni pregledi) ── */}
-      {reminders.length > 0 && (
+      {/* ── Plan za dalje (vakcine + kontrolni pregledi bez zakazanog termina) ── */}
+      {planReminders.length > 0 && (
         <motion.div variants={stagger.item} className="space-y-3">
           <div className="flex items-start gap-2">
             <div className="icon-sm icon-amber shrink-0">
               <NotebookIcon size={13} strokeWidth={2.25} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm" style={{ fontWeight: 700 }}>Podsetnici — plan za dalje</h3>
+              <h3 className="text-sm" style={{ fontWeight: 700 }}>Podsetnici, plan za dalje</h3>
               <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Vakcinacije i kontrolni pregledi — još nisu zakazani termini.
+                Vakcinacije i kontrolni pregledi za koje još nije zakazan termin.
               </p>
             </div>
           </div>
@@ -571,7 +712,7 @@ export default function OwnerHomePage() {
               border: "1px solid rgba(217,119,6,0.15)",
             }}
           >
-            {[...reminders]
+            {[...planReminders]
               .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
               .map((r, i, arr) => (
                 <div

@@ -42,25 +42,25 @@ export const GENDER_OPTIONS: { value: Gender; label: string }[] = [
 
 /** Species-aware placeholder text — small detail that makes the form feel "smart". */
 export const BREED_PLACEHOLDER: Record<Species, string> = {
-  dog:     "npr. Zlatni Retriver",
-  cat:     "npr. Britanska kratkodlaka",
-  rabbit:  "npr. Holland Lop",
-  bird:    "npr. Nimfa papagaj",
-  rodent:  "npr. Sirijski hrčak",
-  reptile: "npr. Brada agama",
-  ferret:  "npr. Standardni tvor",
-  other:   "Upiši vrstu",
+  dog:      "npr. Zlatni Retriver",
+  cat:      "npr. Britanska kratkodlaka",
+  rabbit:   "npr. Holland Lop",
+  bird:     "npr. Nimfa papagaj",
+  rodent:   "npr. Sirijski hrčak",
+  reptile:  "npr. Brada agama",
+  hedgehog: "npr. Afrički patuljasti jež",
+  other:    "Upiši vrstu",
 }
 
 export const COLOR_PLACEHOLDER: Record<Species, string> = {
-  dog:     "npr. Zlatna",
-  cat:     "npr. Crno-bela",
-  rabbit:  "npr. Braon",
-  bird:    "npr. Žuta",
-  rodent:  "npr. Bela",
-  reptile: "npr. Zelena",
-  ferret:  "npr. Sable",
-  other:   "npr. Braon",
+  dog:      "npr. Zlatna",
+  cat:      "npr. Crno-bela",
+  rabbit:   "npr. Braon",
+  bird:     "npr. Žuta",
+  rodent:   "npr. Bela",
+  reptile:  "npr. Zelena",
+  hedgehog: "npr. Cinamon",
+  other:    "npr. Braon",
 }
 
 /**

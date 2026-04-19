@@ -61,7 +61,7 @@ create table if not exists pets (
   owner_id          uuid references profiles not null,
   name              text not null,
   species           text not null check (species in (
-    'dog','cat','rabbit','bird','rodent','reptile','ferret','other'
+    'dog','cat','rabbit','bird','rodent','reptile','hedgehog','other'
   )),
   breed             text,
   birth_date        date,

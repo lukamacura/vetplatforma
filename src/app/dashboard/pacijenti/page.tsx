@@ -83,7 +83,7 @@ function StatusDot({ date, icon: Icon }: { date: string | null; icon: React.Elem
   )
 }
 
-type FilterMode = "all" | "overdue" | "upcoming" | "ok"
+type FilterMode = "all" | "overdue" | "upcoming"
 
 function CopyLinkButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false)
@@ -117,7 +117,7 @@ function CopyLinkButton({ url }: { url: string }) {
   )
 }
 
-function PetRowCard({ row, index, onClick }: { row: PetRow; index: number; onClick: () => void }) {
+function PetRowCard({ row, onClick }: { row: PetRow; index: number; onClick: () => void }) {
   const { pet, owner } = row
   const isOverdue =
     (pet.next_vaccine_date && new Date(pet.next_vaccine_date) < new Date()) ||
@@ -293,7 +293,6 @@ export default function PatientsPage() {
         const cs = dateStatus(pet.next_control_date)
         if (filterMode === "overdue") return vs === "overdue" || cs === "overdue"
         if (filterMode === "upcoming") return vs === "soon" || cs === "soon"
-        if (filterMode === "ok") return (vs === "ok" || vs === null) && (cs === "ok" || cs === null)
         return true
       })
     }
@@ -318,9 +317,8 @@ export default function PatientsPage() {
 
   const filterButtons: { key: FilterMode; label: string; count?: number; color?: string }[] = [
     { key: "all", label: "Svi", count: stats.total },
-    { key: "overdue", label: "Zakasneli", count: stats.overdue, color: "var(--red)" },
+    { key: "overdue", label: "Zakasnili", count: stats.overdue, color: "var(--red)" },
     { key: "upcoming", label: "Uskoro", count: stats.upcoming, color: "var(--amber)" },
-    { key: "ok", label: "U redu", color: "var(--green)" },
   ]
 
   return (

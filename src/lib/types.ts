@@ -12,13 +12,15 @@ export interface Clinic {
   slug:                                string
   owner_id:                            string
   created_at:                          string
-  // Global pauza between appointments (0 / 5 / 10 / 15 min, default 10).
   buffer_minutes:                      number
   trial_started_at:                    string | null
   subscription_status:                 SubscriptionStatus
   subscription_current_period_end:     string | null
   subscription_cancel_at_period_end:   boolean
   stripe_customer_id:                  string | null
+  description?:                        string | null
+  logo_url?:                           string | null
+  address?:                            string | null
 }
 
 export interface Profile {

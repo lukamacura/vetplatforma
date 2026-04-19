@@ -241,7 +241,7 @@ function AppointmentRow({
         </div>
       </div>
 
-      {/* Yellow private-notes editor — mirrors owner's "Privatna beleška" psychology */}
+      {/* Yellow private-notes editor - mirrors owner's "Privatna beleška" psychology */}
       <AnimatePresence initial={false}>
         {isExpanded && (
           <motion.div
@@ -488,11 +488,11 @@ export default function DashboardPage() {
 
         setAppointments(apptData.map((a) => ({
           ...a,
-          pet_name:         petMap[a.pet_id]?.name           ?? "—",
+          pet_name:         petMap[a.pet_id]?.name           ?? "-",
           pet_species:      petMap[a.pet_id]?.species        ?? "other",
           pet_photo_url:    petMap[a.pet_id]?.photo_url      ?? null,
-          owner_name:       ownerMap[a.owner_id]             ?? "—",
-          service_name:     serviceMap[a.service_id]?.name   ?? "—",
+          owner_name:       ownerMap[a.owner_id]             ?? "-",
+          service_name:     serviceMap[a.service_id]?.name   ?? "-",
           service_duration: serviceMap[a.service_id]?.duration_minutes ?? 30,
         })))
       } else {
@@ -642,16 +642,16 @@ export default function DashboardPage() {
 
   const statLabel = isToday
     ? "Zakazivanja danas"
-    : `Zakazivanja — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
+    : `Zakazivanja - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
 
   const now = new Date()
   const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth()
   const viewedMonthName = new Date(viewYear, viewMonth).toLocaleDateString("sr-Latn-RS", { month: "long" })
   const revenueLabel = isCurrentMonth
     ? "Planirani prihod ovog meseca"
-    : `Planirani prihod — ${viewedMonthName}`
+    : `Planirani prihod - ${viewedMonthName}`
   const revenueValue = monthlyRevenue === null
-    ? "—"
+    ? "-"
     : `${monthlyRevenue.toLocaleString("sr-Latn-RS")} RSD`
   const revenueSubline = monthlyRevenue === null
     ? undefined
@@ -692,7 +692,7 @@ export default function DashboardPage() {
       {/* Bento grid: Calendar + Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
 
-      {/* Mini month calendar — spans 3 rows on desktop to match 3 stat cards */}
+      {/* Mini month calendar - spans 3 rows on desktop to match 3 stat cards */}
       <motion.div variants={stagger.item} className="lg:col-span-2 lg:row-span-3 solid-card rounded-2xl p-4">
 
         {/* Month header */}
@@ -841,17 +841,17 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-        {/* Stat cards — stacked on the right in bento */}
+        {/* Stat cards - stacked on the right in bento */}
         <StatCard
           icon={CalendarDays}
           label={statLabel}
-          value={loading ? "—" : appointments.filter((a) => a.status === "confirmed").length}
+          value={loading ? "-" : appointments.filter((a) => a.status === "confirmed").length}
           iconClass="icon-blue"
         />
         <StatCard
           icon={Users}
           label="Povezani klijenti"
-          value={loading ? "—" : connectedCount}
+          value={loading ? "-" : connectedCount}
           iconClass="icon-brand"
         />
         <StatCard
@@ -865,7 +865,7 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Day detail — Schedule + Podsetnici side-by-side on desktop */}
+      {/* Day detail - Schedule + Podsetnici side-by-side on desktop */}
       <div className={`grid grid-cols-1 gap-4 lg:gap-5 ${selectedReminders.length > 0 ? "lg:grid-cols-2" : ""} items-start`}>
 
         {/* Schedule card */}
@@ -882,7 +882,7 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
-                  {isToday ? "Raspored za danas" : `Raspored — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                  {isToday ? "Raspored za danas" : `Raspored - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
                 </h3>
                 {!loading && appointments.length > 0 && (
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
@@ -928,7 +928,7 @@ export default function DashboardPage() {
                   {isToday ? "Nema zakazivanja za danas" : "Nema zakazivanja za ovaj dan"}
                 </p>
                 <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
-                  Vlasnici mogu zakazati termin sami — bez telefonskog poziva.
+                  Vlasnici mogu zakazati termin sami - bez telefonskog poziva.
                 </p>
               </div>
             ) : (
@@ -951,7 +951,7 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
-        {/* Podsetnici card — vaccines & controls for the selected day */}
+        {/* Podsetnici card - vaccines & controls for the selected day */}
         {selectedReminders.length > 0 && (
           <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
 
@@ -968,7 +968,7 @@ export default function DashboardPage() {
                   <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
                     {isToday
                       ? "Podsetnici za danas"
-                      : `Podsetnici — ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                      : `Podsetnici - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
                   </h3>
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {selectedReminders.length} {selectedReminders.length === 1 ? "podsetnik" : "podsetnika"}
