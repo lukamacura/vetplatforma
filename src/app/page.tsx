@@ -109,11 +109,44 @@ export default async function RootPage() {
 
         {/* Hero mockup */}
         <div className="relative z-10 mt-20 w-full max-w-5xl mx-auto">
-          <MockupFrame
-            label="Rotato mockup — dashboard pregled"
-            aspect="16/9"
-            url="vetplatforma.com/dashboard"
-          />
+          <div
+            className="w-full rounded-2xl overflow-hidden"
+            style={{
+              border: '1px solid rgba(43,181,160,0.20)',
+              background: 'rgba(255,255,255,0.02)',
+              boxShadow:
+                '0 40px 100px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), 0 0 60px rgba(43,181,160,0.06)',
+            }}
+          >
+            {/* Browser chrome */}
+            <div
+              className="flex items-center gap-2 px-4 py-2.5"
+              style={{
+                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(255,255,255,0.03)',
+              }}
+            >
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(220,38,38,0.45)' }} />
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(234,179,8,0.45)' }} />
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(43,181,160,0.45)' }} />
+              <div
+                className="h-4 rounded-md flex items-center justify-center px-3 ml-2"
+                style={{ background: 'rgba(255,255,255,0.04)', minWidth: 180 }}
+              >
+                <span className="text-xs" style={{ color: 'rgba(148,163,184,0.45)', fontSize: 10 }}>
+                  vetplatforma.com/dashboard
+                </span>
+              </div>
+            </div>
+            <video
+              src="/video_hero.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full block"
+            />
+          </div>
         </div>
       </section>
 
@@ -245,7 +278,7 @@ export default async function RootPage() {
               <ul className="space-y-3 mb-8">
                 {FOUNDING_FEATURES.map((item) => (
                   <li key={item} className="flex items-center gap-3 text-sm font-medium">
-                    <div className="icon-sm icon-brand flex-shrink-0">
+                    <div className="icon-sm icon-brand shrink-0">
                       <Check size={13} />
                     </div>
                     {item}
@@ -274,7 +307,7 @@ export default async function RootPage() {
               <ul className="space-y-3 mb-8">
                 {STANDARD_FEATURES.map((item) => (
                   <li key={item} className="flex items-center gap-3 text-sm font-medium">
-                    <div className="icon-sm icon-muted flex-shrink-0">
+                    <div className="icon-sm icon-muted shrink-0">
                       <Check size={13} />
                     </div>
                     {item}
@@ -408,66 +441,6 @@ export default async function RootPage() {
    Sub-components (server-only, no client JS)
 ───────────────────────────────────────── */
 
-function MockupFrame({
-  label,
-  aspect,
-  url,
-}: {
-  label: string
-  aspect: string
-  url: string
-}) {
-  return (
-    <div
-      className="w-full rounded-2xl overflow-hidden"
-      style={{
-        aspectRatio: aspect,
-        border: '1px solid rgba(43,181,160,0.20)',
-        background: 'rgba(255,255,255,0.02)',
-        boxShadow:
-          '0 40px 100px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04), 0 0 60px rgba(43,181,160,0.06)',
-      }}
-    >
-      {/* Browser chrome */}
-      <div
-        className="flex items-center gap-2 px-4 py-2.5"
-        style={{
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          background: 'rgba(255,255,255,0.03)',
-        }}
-      >
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(220,38,38,0.45)' }} />
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(234,179,8,0.45)' }} />
-        <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(43,181,160,0.45)' }} />
-        <div
-          className="h-4 rounded-md flex items-center justify-center px-3 ml-2"
-          style={{ background: 'rgba(255,255,255,0.04)', minWidth: 180 }}
-        >
-          <span className="text-xs" style={{ color: 'rgba(148,163,184,0.45)', fontSize: 10 }}>
-            {url}
-          </span>
-        </div>
-      </div>
-      {/* Placeholder content */}
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center py-8">
-          <div
-            className="icon-lg icon-brand mx-auto mb-3"
-            style={{ width: 52, height: 52, borderRadius: 14 }}
-          >
-            <FolderOpen size={22} />
-          </div>
-          <p
-            className="text-xs font-medium"
-            style={{ color: 'rgba(148,163,184,0.45)' }}
-          >
-            {label}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function ShowcaseRow({
   eyebrow,
@@ -493,7 +466,7 @@ function ShowcaseRow({
       <ul className="space-y-3">
         {bullets.map((b) => (
           <li key={b} className="flex items-start gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            <div className="icon-sm icon-brand flex-shrink-0 mt-0.5">
+            <div className="icon-sm icon-brand shrink-0 mt-0.5">
               <Check size={13} />
             </div>
             {b}
