@@ -76,12 +76,13 @@ export default function PodesavanjaPage() {
   const [bufferError,    setBufferError]    = useState<string | null>(null)
   const bufferSavedRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
   const profileSavedRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [savingHours,    setSavingHours]    = useState(false)
   const [copied,         setCopied]         = useState(false)
   const [loading,        setLoading]        = useState(true)
   const [isPending,      startTransition]   = useTransition()
 
-  const [hoursMsg,  setHoursMsg]  = useState<string | null>(null)
+  const [hoursStatus,  setHoursStatus]  = useState<SaveStatus>("idle")
+  const hoursSavedRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hoursDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Debounce + "Sačuvano" auto-hide timers for inline auto-save
   const clinicDebounceRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -198,6 +199,8 @@ export default function PodesavanjaPage() {
       if (bufferSavedRef.current)    clearTimeout(bufferSavedRef.current)
       if (profileSavedRef.current)   clearTimeout(profileSavedRef.current)
       if (profileDebounceRef.current) clearTimeout(profileDebounceRef.current)
+      if (hoursDebounceRef.current)  clearTimeout(hoursDebounceRef.current)
+      if (hoursSavedRef.current)     clearTimeout(hoursSavedRef.current)
     }
   }, [])
 
@@ -318,12 +321,10 @@ export default function PodesavanjaPage() {
     profileDebounceRef.current = setTimeout(saveProfileFields, 600)
   }, [saveProfileFields])
 
-  async function handleSaveHours(e: React.FormEvent) {
-    e.preventDefault()
+  const saveHours = useCallback(async (currentHours: HoursRow[]) => {
     if (!clinicId) return
-    setSavingHours(true)
     const supabase = createClient()
-    const rows = hours.map((h) => ({
+    const rows = currentHours.map((h) => ({
       clinic_id:  clinicId,
       weekday:    h.weekday,
       is_closed:  h.is_closed,
@@ -333,13 +334,21 @@ export default function PodesavanjaPage() {
     const { error } = await supabase
       .from("clinic_hours")
       .upsert(rows, { onConflict: "clinic_id,weekday" })
-    setSavingHours(false)
-    setHoursMsg(error ? "Greška pri čuvanju." : "Radni sati sačuvani!")
-    setTimeout(() => setHoursMsg(null), 2500)
-  }
+    if (error) { setHoursStatus("idle"); return }
+    setHoursStatus("saved")
+    if (hoursSavedRef.current) clearTimeout(hoursSavedRef.current)
+    hoursSavedRef.current = setTimeout(() => setHoursStatus("idle"), 1800)
+  }, [clinicId])
 
   function updateHoursRow(weekday: number, patch: Partial<HoursRow>) {
-    setHours((prev) => prev.map((r) => r.weekday === weekday ? { ...r, ...patch } : r))
+    if (!loadedRef.current) return
+    setHours((prev) => {
+      const next = prev.map((r) => r.weekday === weekday ? { ...r, ...patch } : r)
+      setHoursStatus("saving")
+      if (hoursDebounceRef.current) clearTimeout(hoursDebounceRef.current)
+      hoursDebounceRef.current = setTimeout(() => saveHours(next), 600)
+      return next
+    })
   }
 
   if (loading) {
@@ -754,17 +763,20 @@ export default function PodesavanjaPage() {
 
       {/* ── Working hours — full width, grid layout ── */}
       <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="icon-md icon-blue">
-            <Clock size={16} strokeWidth={2} />
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="icon-md icon-blue">
+              <Clock size={16} strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="text-sm" style={{ fontWeight: 700 }}>Radni sati</h2>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Prikazuju se vlasnicima pri zakazivanju</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm" style={{ fontWeight: 700 }}>Radni sati</h2>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Prikazuju se vlasnicima pri zakazivanju</p>
-          </div>
+          <SaveIndicator status={hoursStatus} />
         </div>
 
-        <form onSubmit={handleSaveHours}>
+        <div>
           <div
             className="rounded-xl overflow-hidden mb-5"
             style={{ border: "1px solid var(--border)" }}
@@ -855,22 +867,7 @@ export default function PodesavanjaPage() {
             })}
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={savingHours}
-              className="btn-primary"
-              style={{ opacity: savingHours ? 0.6 : 1 }}
-            >
-              {savingHours ? "Čuvanje..." : "Sačuvaj radne sate"}
-            </button>
-            {hoursMsg && (
-              <span className="text-sm" style={{ color: hoursMsg.includes("Greška") ? "var(--red)" : "var(--green)" }}>
-                {hoursMsg}
-              </span>
-            )}
-          </div>
-        </form>
+        </div>
       </motion.div>
     </motion.div>
   )

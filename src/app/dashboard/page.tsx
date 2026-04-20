@@ -107,6 +107,7 @@ function AppointmentRow({
   appt,
   isToday,
   onNoShow,
+  onUndoNoShow,
   isExpanded,
   onToggleExpand,
   noteDraft,
@@ -116,6 +117,7 @@ function AppointmentRow({
   appt: AppointmentWithDetails
   isToday: boolean
   onNoShow: (id: string) => void
+  onUndoNoShow: (id: string) => void
   isExpanded: boolean
   onToggleExpand: (id: string) => void
   noteDraft: string
@@ -204,12 +206,7 @@ function AppointmentRow({
 
         {/* Status badges + actions */}
         <div className="flex items-center gap-2 shrink-0">
-          {isNoShow ? (
-            <span className="badge badge-red">
-              <UserX size={10} strokeWidth={2} />
-              Nije došao
-            </span>
-          ) : isCancelled ? (
+          {isCancelled ? (
             <span className="badge badge-muted">Otkazano</span>
           ) : (
             <>
@@ -218,14 +215,33 @@ function AppointmentRow({
                 {appt.service_duration} min
               </div>
               {isToday && (isPast || isNow) && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onNoShow(appt.id) }}
-                  className="no-show-btn flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
-                >
-                  <UserX size={11} strokeWidth={2} />
+                isNoShow ? (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onUndoNoShow(appt.id) }}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all"
+                    style={{ background: "rgba(220,38,38,0.1)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.2)" }}
+                  >
+                    <UserX size={11} strokeWidth={2} />
+                    Nije došao
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onNoShow(appt.id) }}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all"
+                    style={{ background: "rgba(22,163,74,0.1)", color: "var(--green)", fontWeight: 600, border: "1px solid rgba(22,163,74,0.2)" }}
+                  >
+                    <Check size={11} strokeWidth={2.5} />
+                    Došao
+                  </button>
+                )
+              )}
+              {!isToday && isNoShow && (
+                <span className="badge badge-red">
+                  <UserX size={10} strokeWidth={2} />
                   Nije došao
-                </button>
+                </span>
               )}
             </>
           )}
@@ -362,6 +378,22 @@ export default function DashboardPage() {
     } else {
       setAppointments((prev) =>
         prev.map((a) => a.id === id ? { ...a, status: "no_show" } : a)
+      )
+    }
+  }, [])
+
+  const handleUndoNoShow = useCallback(async (id: string) => {
+    setNoShowError(null)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("appointments")
+      .update({ status: "confirmed" })
+      .eq("id", id)
+    if (error) {
+      setNoShowError("Greška pri poništavanju statusa. Pokušajte ponovo.")
+    } else {
+      setAppointments((prev) =>
+        prev.map((a) => a.id === id ? { ...a, status: "confirmed" } : a)
       )
     }
   }, [])
@@ -939,6 +971,7 @@ export default function DashboardPage() {
                     appt={a}
                     isToday={isToday}
                     onNoShow={handleNoShow}
+                    onUndoNoShow={handleUndoNoShow}
                     isExpanded={expandedApptId === a.id}
                     onToggleExpand={handleToggleExpand}
                     noteDraft={apptNotesDraft[a.id] ?? a.vet_notes ?? ""}

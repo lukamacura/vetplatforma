@@ -38,7 +38,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Sidebar (desktop only) — dark clinical spine ── */}
       <aside
-        className="w-[232px] flex-col hidden md:flex shrink-0 fixed top-0 left-0 h-screen z-30"
+        className="w-58 flex-col hidden md:flex shrink-0 fixed top-0 left-0 h-screen z-30"
         style={{
           background:  "var(--sidebar-bg)",
           borderRight: "1px solid var(--sidebar-border)",
@@ -54,11 +54,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             width={200}
             height={200}
             priority
-            className="h-auto w-[160px] select-none"
+            className="h-auto w-40 select-none"
           />
-          <p className="text-xs" style={{ color: "var(--sidebar-text)", opacity: 0.65, fontWeight: 500 }}>
-            Upravljanje klinikom
-          </p>
+   
         </div>
 
         <nav aria-label="Glavna navigacija" className="flex-1 px-3 py-4 space-y-0.5">
@@ -98,7 +96,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ── Mobile header — brand + logout ── */}
-      <header className="mobile-header fixed top-0 left-0 right-0 md:hidden z-[9999] flex items-center justify-between px-4"
+      <header className="mobile-header fixed top-0 left-0 right-0 md:hidden z-9999 flex items-center justify-between px-4"
         style={{
           height: 56,
           background: "var(--sidebar-bg)",
@@ -133,8 +131,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Main ── */}
-      <main className="flex-1 overflow-auto content-gradient md:ml-[232px]">
-        <div className="relative z-1 p-5 pt-[72px] md:pt-8 md:p-8 max-w-7xl mx-auto pb-28 md:pb-8">
+      <main className="flex-1 overflow-auto content-gradient md:ml-58">
+        <div className="relative z-1 p-5 pt-18 md:pt-8 md:p-8 max-w-7xl mx-auto pb-28 md:pb-8">
           {children}
         </div>
       </main>
@@ -142,7 +140,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* ── Bottom nav (mobile only) — all 5 destinations ── */}
       <nav
         aria-label="Glavna navigacija"
-        className="mobile-bottom-nav fixed bottom-0 left-0 right-0 md:hidden flex z-[9999]"
+        className="mobile-bottom-nav fixed bottom-0 left-0 right-0 md:hidden flex z-9999"
         style={{
           background:  "var(--sidebar-bg)",
           borderTop:   "1px solid var(--sidebar-border)",
