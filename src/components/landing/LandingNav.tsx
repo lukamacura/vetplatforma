@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Shield, Menu, X } from 'lucide-react'
+import Image from 'next/image'
+import { Menu, X } from 'lucide-react'
 
 export default function LandingNav() {
   const [scrolled, setScrolled] = useState(false)
@@ -25,19 +26,14 @@ export default function LandingNav() {
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div
-            className="icon-sm icon-brand transition-transform duration-300 group-hover:scale-105"
-            style={{ flexShrink: 0 }}
-          >
-            <Shield size={14} />
-          </div>
-          <span
-            className="font-bold text-base tracking-tight"
-            style={{ color: '#ffffff', letterSpacing: '-0.02em' }}
-          >
-            VetPlatforma
-          </span>
+        <Link href="/" className="flex items-center group">
+          <Image
+            src="/logo.png"
+            alt="VetPlatforma"
+            width={120}
+            height={80}
+            className="transition-transform duration-300 group-hover:scale-105 p-6"
+          />
         </Link>
 
         {/* Desktop nav */}

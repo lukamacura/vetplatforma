@@ -689,3 +689,53 @@
   transform: scale(0.97);
   transition: transform 0.1s ease;
 }
+
+/* ─────────────────────────────────────────
+   HERO — entrance animations + glow labels
+───────────────────────────────────────── */
+@keyframes hero-fade-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes label-glow-breathe {
+  0%, 100% {
+    box-shadow:
+      0 0 6px  var(--glow, transparent),
+      0 0 0 1px var(--glow-border, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 18px var(--glow, transparent),
+      0 0 36px var(--glow, transparent),
+      0 0 0 1px var(--glow-border, transparent);
+  }
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0px);  }
+  50%       { transform: translateY(-9px); }
+}
+
+.hero-anim-1 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.05s both; }
+.hero-anim-2 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.18s both; }
+.hero-anim-3 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.30s both; }
+.hero-anim-4 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.42s both; }
+.hero-anim-5 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.55s both; }
+.hero-anim-6 { animation: hero-fade-up 0.65s cubic-bezier(0.16,1,0.3,1) 0.72s both; }
+
+.hero-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  border: 1px solid var(--glow-border, rgba(255,255,255,0.12));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: label-glow-breathe 3s ease-in-out infinite;
+}
