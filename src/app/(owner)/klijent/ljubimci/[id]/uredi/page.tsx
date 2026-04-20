@@ -199,17 +199,6 @@ export default function EditPetPage() {
                 fill
                 className="object-cover"
               />
-              <button
-                type="button"
-                onClick={removePhoto}
-                className="absolute top-0 right-0 p-1 rounded-full"
-                style={{
-                  background: "var(--red)", color: "#fff",
-                  boxShadow: "0 2px 6px rgba(220,38,38,0.3)",
-                }}
-              >
-                <XIcon size={12} strokeWidth={2.5} />
-              </button>
             </div>
           ) : (
             <div
@@ -239,25 +228,43 @@ export default function EditPetPage() {
           onChange={handlePhotoSelect}
           className="hidden"
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5"
-          style={{
-            fontWeight: 600, color: "var(--brand)",
-            background: "var(--brand-tint)",
-            border: "1px solid rgba(43,181,160,0.2)",
-            transition: "all 0.2s ease",
-          }}
-        >
-          <Camera size={13} strokeWidth={2} />
-          {displayPhoto ? "Promeni sliku" : "Dodaj sliku"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5"
+            style={{
+              fontWeight: 600, color: "var(--brand)",
+              background: "var(--brand-tint)",
+              border: "1px solid rgba(43,181,160,0.2)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Camera size={13} strokeWidth={2} />
+            {displayPhoto ? "Promeni sliku" : "Dodaj sliku"}
+          </button>
+          {displayPhoto && (
+            <button
+              type="button"
+              onClick={removePhoto}
+              className="flex items-center justify-center rounded-lg"
+              style={{
+                width: 28, height: 28,
+                background: "rgba(220,38,38,0.1)",
+                border: "1px solid rgba(220,38,38,0.25)",
+                color: "var(--red)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <XIcon size={13} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
       </motion.div>
 
       {/* Form */}
       <motion.div variants={stagger.item}>
-        <form onSubmit={handleSave} className="space-y-5">
+        <form id="edit-pet-form" onSubmit={handleSave} className="space-y-5">
           <div className="solid-card rounded-2xl p-5 space-y-4">
             {/* Ime */}
             <div className="space-y-1.5">
@@ -402,7 +409,7 @@ export default function EditPetPage() {
               <Label htmlFor="petNotes">Napomena za veterinara</Label>
               <textarea
                 id="petNotes"
-                className="w-full min-h-[100px] rounded-xl text-sm resize-y px-3 py-2"
+                className="w-full min-h-25 rounded-xl text-sm resize-y px-3 py-2"
                 style={{
                   background: "var(--surface-raised)",
                   color: "var(--text-primary)",
@@ -420,14 +427,31 @@ export default function EditPetPage() {
             </div>
           </div>
 
-          {error && (
-            <p className="text-sm px-1" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</p>
-          )}
+          {/* bottom spacing so fixed bar doesn't overlap last field */}
+          <div className="h-24" />
+        </form>
+      </motion.div>
 
+      {/* Fixed bottom CTA bar */}
+      <div
+        className="fixed left-0 right-0 z-60 px-4 py-3"
+        style={{
+          bottom: "calc(56px + env(safe-area-inset-bottom, 0px))",
+          background: "rgba(var(--surface-rgb, 255,255,255), 0.85)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <div className="max-w-lg mx-auto space-y-2">
+          {error && (
+            <p className="text-xs px-1 text-center" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</p>
+          )}
           <div className="flex items-center gap-3">
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} className="flex-1">
               <button
                 type="submit"
+                form="edit-pet-form"
                 disabled={saving || uploadingPhoto || !name.trim()}
                 className="btn-primary w-full py-3 text-sm"
                 style={{ fontWeight: 600 }}
@@ -447,8 +471,8 @@ export default function EditPetPage() {
               </motion.div>
             )}
           </div>
-        </form>
-      </motion.div>
+        </div>
+      </div>
     </motion.div>
   )
 }
