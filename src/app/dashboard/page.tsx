@@ -898,7 +898,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Day detail - Schedule + Podsetnici side-by-side on desktop */}
-      <div className={`grid grid-cols-1 gap-4 lg:gap-5 ${selectedReminders.length > 0 ? "lg:grid-cols-2" : ""} items-start`}>
+      <div className="grid grid-cols-1 gap-4 lg:gap-5 lg:grid-cols-2 items-start">
 
         {/* Schedule card */}
         <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
@@ -985,37 +985,51 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Podsetnici card - vaccines & controls for the selected day */}
-        {selectedReminders.length > 0 && (
-          <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
 
-            {/* Card header */}
-            <div
-              className="flex items-center justify-between gap-3 px-5 py-4"
-              style={{ borderBottom: "1px solid var(--border)" }}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="icon-sm icon-amber shrink-0">
-                  <Sparkles size={13} strokeWidth={2.25} />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
-                    {isToday
-                      ? "Podsetnici za danas"
-                      : `Podsetnici - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
-                  </h3>
+          {/* Card header */}
+          <div
+            className="flex items-center justify-between gap-3 px-5 py-4"
+            style={{ borderBottom: "1px solid var(--border)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="icon-sm icon-amber shrink-0">
+                <Sparkles size={13} strokeWidth={2.25} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
+                  {isToday
+                    ? "Podsetnici za danas"
+                    : `Podsetnici - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                </h3>
+                {selectedReminders.length > 0 && (
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {selectedReminders.length} {selectedReminders.length === 1 ? "podsetnik" : "podsetnika"}
                   </p>
-                </div>
+                )}
               </div>
-              <span className="badge badge-amber shrink-0">
-                <Sparkles size={11} strokeWidth={2} />
-                {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
-              </span>
             </div>
+            <span className="badge badge-amber shrink-0">
+              <Sparkles size={11} strokeWidth={2} />
+              {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
+            </span>
+          </div>
 
-            {/* Card body */}
-            <div className="p-4">
+          {/* Card body */}
+          <div className="p-4">
+            {selectedReminders.length === 0 ? (
+              <div className="py-14 text-center">
+                <div className="icon-lg icon-amber mx-auto mb-4">
+                  <Sparkles size={22} strokeWidth={1.75} />
+                </div>
+                <p className="text-sm mb-1" style={{ fontWeight: 600 }}>
+                  {isToday ? "Nema podsetnika za danas" : "Nema podsetnika za ovaj dan"}
+                </p>
+                <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
+                  Vakcinacije i kontrolni pregledi zakazani za ovaj dan pojaviće se ovde.
+                </p>
+              </div>
+            ) : (
               <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
                 {selectedReminders.map((r) => (
                   <motion.div
@@ -1046,9 +1060,9 @@ export default function DashboardPage() {
                   </motion.div>
                 ))}
               </motion.div>
-            </div>
-          </motion.div>
-        )}
+            )}
+          </div>
+        </motion.div>
 
       </div>
     </motion.div>

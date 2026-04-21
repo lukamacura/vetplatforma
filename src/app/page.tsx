@@ -181,9 +181,15 @@ export default async function RootPage() {
           >
             Budite Veterinar,{' '}
             <br className="hidden sm:block" />
-            NE{' '}
             <span style={{
-              background: 'linear-gradient(130deg, #2BB5A0 0%, #62EDD8 45%, #2BB5A0 100%)',
+              background: 'linear-gradient(130deg, #b52b34 0%, #ed62b1 45%, #a00000 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>NE</span>
+            {' '}
+            <span style={{
+              background: 'linear-gradient(130deg, #2BB5A0 0%, #71c6b9 45%, #2BB5A0 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',

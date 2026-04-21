@@ -629,11 +629,11 @@ export default function PetProfilePage() {
         </div>
       </motion.div>
 
-      {/* Body: 2-column on lg+ */}
+      {/* Body: 3-column on lg+ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         {/* Left column: Podaci o ljubimcu */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-7">
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm" style={{ fontWeight: 600 }}>Podaci o ljubimcu</h3>
             <SaveIndicator status={basicsStatus} />
@@ -679,11 +679,8 @@ export default function PetProfilePage() {
           </div>
         </motion.div>
 
-        {/* Right column: Vakcine + Posete stacked */}
-        <div className="lg:col-span-5 flex flex-col gap-5">
-
-          {/* Vakcine i pregledi */}
-          <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5">
+        {/* Middle column: Podsetnici */}
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm" style={{ fontWeight: 600 }}>Termini i vakcinacija</h3>
               <SaveIndicator status={datesStatus} />
@@ -744,8 +741,8 @@ export default function PetProfilePage() {
             </div>
           </motion.div>
 
-          {/* Posete */}
-          <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 flex-1">
+        {/* Right column: Posete */}
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-3">
             <h3 className="text-sm mb-4" style={{ fontWeight: 600 }}>Istorija poseta</h3>
         <div className="relative pl-1">
           <ul className="space-y-0">
@@ -867,7 +864,6 @@ export default function PetProfilePage() {
         </div>
       </motion.div>
 
-        </div>{/* /right column */}
       </div>{/* /grid */}
     </motion.div>
   )
