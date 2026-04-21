@@ -202,10 +202,15 @@ export default async function RootPage() {
 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center hero-anim-4">
-            <Link href="/register" className="btn-primary text-base px-8 py-3">
-              Počni besplatno
+            <a
+              href="https://wa.me/381631012474"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary text-base px-8 py-3"
+            >
+              Kontaktirajte nas
               <ArrowRight size={16} />
-            </Link>
+            </a>
             <Link
               href="/login"
               className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg font-semibold text-base transition-all duration-300"
@@ -402,10 +407,15 @@ export default async function RootPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/register" className="btn-primary w-full justify-center text-sm">
+              <a
+                href="https://wa.me/381631012474"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary w-full justify-center text-sm"
+              >
                 Rezerviši mesto
                 <ArrowRight size={15} />
-              </Link>
+              </a>
             </div>
 
             {/* Standard */}
@@ -431,13 +441,15 @@ export default async function RootPage() {
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/register"
+              <a
+                href="https://wa.me/381631012474"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-full flex items-center justify-center gap-2 py-2.5 px-6 rounded-lg font-semibold text-sm transition-all duration-300 hover:bg-[--surface-raised]"
                 style={{ border: '1px solid var(--border-strong)', color: 'var(--text-primary)' }}
               >
                 Počni besplatno
-              </Link>
+              </a>
               <p className="text-xs text-center mt-3" style={{ color: 'var(--text-muted)' }}>
                 30 dana probno, bez  kartice
               </p>
@@ -469,10 +481,15 @@ export default async function RootPage() {
           <p className="mb-8 text-lg" style={{ color: 'rgba(203,213,225,0.78)' }}>
             VetPlatforma ih vraća automatski. Zakaži 20-minutni demo i vidite kako to izgleda u vašoj ordinaciji.
           </p>
-          <Link href="/register" className="btn-primary text-base px-10 py-3">
+          <a
+            href="https://wa.me/381631012474"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary text-base px-10 py-3"
+          >
             Zakaži demo - besplatno
             <ArrowRight size={16} />
-          </Link>
+          </a>
         </div>
       </section>
 

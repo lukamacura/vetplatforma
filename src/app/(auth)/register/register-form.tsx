@@ -15,10 +15,8 @@ function RegisterFormInner() {
   const searchParams = useSearchParams()
   const clinicSlug = searchParams.get("clinic")
 
-  const [role, setRole] = useState<"vet" | "owner">(clinicSlug ? "owner" : "vet")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
-  const [clinicName, setClinicName] = useState("")
   const [inviteClinicName, setInviteClinicName] = useState<string | null>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -44,7 +42,7 @@ function RegisterFormInner() {
       email,
       password,
       options: {
-        data: { role, full_name: fullName, phone: phone || null },
+        data: { role: "owner", full_name: fullName, phone: phone || null },
       },
     })
 
@@ -56,53 +54,20 @@ function RegisterFormInner() {
 
     const userId = data.user.id
 
-    if (role === "vet") {
-      const slug = clinicName
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        .replace(/[^a-z0-9-]/g, "")
-        + "-" + Math.random().toString(36).slice(2, 6)
+    await supabase
+      .from("profiles")
+      .upsert({
+        id: userId,
+        role: "owner",
+        full_name: fullName,
+        phone: phone || null,
+      })
 
-      const { data: clinic, error: clinicError } = await supabase
-        .from("clinics")
-        .insert({ name: clinicName, slug, owner_id: userId })
-        .select()
-        .single()
-
-      if (clinicError || !clinic) {
-        setError("Klinika nije mogla biti kreirana.")
-        setLoading(false)
-        return
-      }
-
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: userId,
-          role: "vet",
-          full_name: fullName,
-          phone: phone || null,
-          clinic_id: clinic.id,
-        })
-
-      router.push("/dashboard")
-    } else {
-      await supabase
-        .from("profiles")
-        .upsert({
-          id: userId,
-          role: "owner",
-          full_name: fullName,
-          phone: phone || null,
-        })
-
-      if (clinicSlug) {
-        await connectOwnerToClinicBySlug(supabase, userId, clinicSlug)
-      }
-
-      router.push("/klijent")
+    if (clinicSlug) {
+      await connectOwnerToClinicBySlug(supabase, userId, clinicSlug)
     }
 
+    router.push("/klijent")
     router.refresh()
   }
 
@@ -114,7 +79,7 @@ function RegisterFormInner() {
             <PawPrint className="h-6 w-6 text-[#2BB5A0]" aria-hidden="true" />
           </div>
           <h1 className="font-heading text-2xl leading-snug font-medium">Kreirajte nalog</h1>
-          <CardDescription>Brza registracija — bez kartice</CardDescription>
+          <CardDescription>Registracija za vlasnike ljubimaca</CardDescription>
         </CardHeader>
         <CardContent>
           {clinicSlug && (
@@ -133,37 +98,6 @@ function RegisterFormInner() {
             </div>
           )}
           <form onSubmit={handleRegister} className="space-y-4">
-            {!clinicSlug && (
-              <div className="flex rounded-lg border p-1 gap-1" role="radiogroup" aria-label="Tip naloga">
-                <button
-                  type="button"
-                  onClick={() => setRole("vet")}
-                  role="radio"
-                  aria-checked={role === "vet"}
-                  className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${
-                    role === "vet"
-                      ? "bg-teal-200 text-teal-600 font-medium"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Veterinar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole("owner")}
-                  role="radio"
-                  aria-checked={role === "owner"}
-                  className={`flex-1 py-1.5 text-sm rounded-md transition-colors ${
-                    role === "owner"
-                      ? "bg-teal-200 text-teal-600 font-medium"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Vlasnik ljubimca
-                </button>
-              </div>
-            )}
-
             <div className="space-y-2">
               <Label htmlFor="fullName">Ime i prezime</Label>
               <Input
@@ -174,19 +108,6 @@ function RegisterFormInner() {
                 required
               />
             </div>
-
-            {role === "vet" && (
-              <div className="space-y-2">
-                <Label htmlFor="clinicName">Naziv klinike / ambulante</Label>
-                <Input
-                  id="clinicName"
-                  placeholder="Vet Ambulanta Novi Sad"
-                  value={clinicName}
-                  onChange={(e) => setClinicName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
 
             <div className="space-y-2">
               <Label htmlFor="phone">Telefon (opcionalno)</Label>

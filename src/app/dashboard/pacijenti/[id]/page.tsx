@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -9,10 +9,10 @@ import {
   Stethoscope,
   Phone,
   CheckCircle,
-  Pencil,
-  X,
   FileText,
   ChevronDown,
+  Loader2,
+  Check,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
@@ -144,6 +144,27 @@ function FieldValue({ children, mono }: { children: React.ReactNode; mono?: bool
   )
 }
 
+type SaveStatus = "idle" | "saving" | "saved"
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  return (
+    <div className="flex items-center gap-1 text-[11px]" style={{ minHeight: 16 }}>
+      {status === "saving" && (
+        <>
+          <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
+          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
+        </>
+      )}
+      {status === "saved" && (
+        <>
+          <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+          <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
+        </>
+      )}
+    </div>
+  )
+}
+
 const inputEdit =
   "h-7 rounded-lg border border-input bg-transparent px-2 text-[13px] font-medium focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 md:text-[13px]"
 
@@ -163,12 +184,8 @@ export default function PetProfilePage() {
   const [pet, setPet] = useState<Pet | null>(null)
   const [owner, setOwner] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [apptHistory, setApptHistory] = useState<ApptHistoryRow[]>([])
-
-  const [editingBasics, setEditingBasics] = useState(false)
 
   const [editName, setEditName] = useState("")
   const [editSpecies, setEditSpecies] = useState<Species>("dog")
@@ -179,15 +196,36 @@ export default function PetProfilePage() {
   const [editGender, setEditGender] = useState<Gender>("unknown")
   const [editColor, setEditColor] = useState("")
   const [weightKg, setWeightKg] = useState("")
+  const [vetNotes, setVetNotes] = useState("")
 
   const [nextVaccineDate, setNextVaccineDate] = useState("")
   const [nextControlDate, setNextControlDate] = useState("")
-  const [vetNotes, setVetNotes] = useState("")
   const [vaccineNote, setVaccineNote] = useState("")
+
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
   const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
   const [savingApptNote, setSavingApptNote] = useState<string | null>(null)
   const [savedApptNote, setSavedApptNote] = useState<string | null>(null)
+
+  // Auto-save state
+  const [basicsStatus, setBasicsStatus] = useState<SaveStatus>("idle")
+  const [datesStatus, setDatesStatus] = useState<SaveStatus>("idle")
+
+  // Prevent saves during initial data load
+  const loadedRef = useRef(false)
+
+  // Refs holding latest field values to avoid stale closures in debounced callbacks
+  const basicsRef = useRef({
+    name: "", species: "dog" as Species, breed: "", birthDate: "",
+    chipId: "", passport: "", gender: "unknown" as Gender, color: "", weightKg: "", vetNotes: "",
+  })
+  const datesRef = useRef({ nextVaccineDate: "", nextControlDate: "", vaccineNote: "" })
+
+  // Debounce + saved-indicator timers
+  const basicsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const basicsSavedRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const datesDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const datesSavedRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -195,7 +233,7 @@ export default function PetProfilePage() {
       const { data: petData, error: petError } = await supabase.from("pets").select("*").eq("id", petId).single()
 
       if (petError || !petData) {
-        setError("Ljubimac nije pronađen.")
+        setLoadError("Ljubimac nije pronađen.")
         setLoading(false)
         return
       }
@@ -211,10 +249,29 @@ export default function PetProfilePage() {
       setEditGender(p.gender ?? "unknown")
       setEditColor(p.color ?? "")
       setWeightKg(p.weight_kg?.toString() ?? "")
+      const notes = (p.vet_notes ?? p.owner_notes) ?? ""
+      setVetNotes(notes)
       setNextVaccineDate(p.next_vaccine_date ?? "")
       setNextControlDate(p.next_control_date ?? "")
-      setVetNotes((p.vet_notes ?? p.owner_notes) ?? "")
       setVaccineNote(p.vaccine_note ?? "")
+
+      basicsRef.current = {
+        name: p.name,
+        species: p.species,
+        breed: p.breed ?? "",
+        birthDate: p.birth_date ?? "",
+        chipId: p.chip_id ?? "",
+        passport: p.passport_number ?? "",
+        gender: p.gender ?? "unknown",
+        color: p.color ?? "",
+        weightKg: p.weight_kg?.toString() ?? "",
+        vetNotes: notes,
+      }
+      datesRef.current = {
+        nextVaccineDate: p.next_vaccine_date ?? "",
+        nextControlDate: p.next_control_date ?? "",
+        vaccineNote: p.vaccine_note ?? "",
+      }
 
       const { data: ownerData } = await supabase.from("profiles").select("*").eq("id", p.owner_id).single()
       setOwner(ownerData as Profile)
@@ -248,76 +305,78 @@ export default function PetProfilePage() {
       }
 
       setLoading(false)
+      loadedRef.current = true
     }
     load()
   }, [petId])
 
-  function cancelBasicsEdit() {
-    if (!pet) return
-    setEditName(pet.name)
-    setEditSpecies(pet.species)
-    setEditBreed(pet.breed ?? "")
-    setEditBirthDate(pet.birth_date ?? "")
-    setEditChipId(pet.chip_id ?? "")
-    setEditPassport(pet.passport_number ?? "")
-    setEditGender(pet.gender ?? "unknown")
-    setEditColor(pet.color ?? "")
-    setWeightKg(pet.weight_kg?.toString() ?? "")
-    setEditingBasics(false)
-  }
-
-  async function handleSave() {
-    if (!pet) return
-    setSaving(true)
-    setSaved(false)
-    setError(null)
-    const supabase = createClient()
-    const { error: updateError } = await supabase
-      .from("pets")
-      .update({
-        name: editName.trim() || pet.name,
-        species: editSpecies,
-        breed: editBreed.trim() || null,
-        birth_date: editBirthDate || null,
-        chip_id: editChipId.trim() || null,
-        passport_number: editPassport.trim() || null,
-        gender: editGender,
-        color: editColor.trim() || null,
-        weight_kg: weightKg ? parseFloat(weightKg) : null,
-        next_vaccine_date: nextVaccineDate || null,
-        next_control_date: nextControlDate || null,
-        vet_notes: vetNotes || null,
-        owner_notes: null,
-        vaccine_note: vaccineNote.trim() || null,
-      })
-      .eq("id", pet.id)
-    setSaving(false)
-    if (updateError) {
-      setError("Greška pri čuvanju.")
-    } else {
-      setSaved(true)
-      const updated = {
-        ...pet,
-        name: editName.trim() || pet.name,
-        species: editSpecies,
-        breed: editBreed.trim() || null,
-        birth_date: editBirthDate || null,
-        chip_id: editChipId.trim() || null,
-        passport_number: editPassport.trim() || null,
-        gender: editGender,
-        color: editColor.trim() || null,
-        weight_kg: weightKg ? parseFloat(weightKg) : null,
-        next_vaccine_date: nextVaccineDate || null,
-        next_control_date: nextControlDate || null,
-        vet_notes: vetNotes || null,
-        owner_notes: null,
-        vaccine_note: vaccineNote.trim() || null,
-      }
-      setPet(updated)
-      setEditingBasics(false)
-      setTimeout(() => setSaved(false), 3000)
+  // Flush timers on unmount
+  useEffect(() => {
+    return () => {
+      if (basicsDebounceRef.current) clearTimeout(basicsDebounceRef.current)
+      if (basicsSavedRef.current)    clearTimeout(basicsSavedRef.current)
+      if (datesDebounceRef.current)  clearTimeout(datesDebounceRef.current)
+      if (datesSavedRef.current)     clearTimeout(datesSavedRef.current)
     }
-  }
+  }, [])
+
+  const saveBasics = useCallback(async () => {
+    if (!pet) return
+    const v = basicsRef.current
+    const supabase = createClient()
+    const { error } = await supabase.from("pets").update({
+      name: v.name.trim() || pet.name,
+      species: v.species,
+      breed: v.breed.trim() || null,
+      birth_date: v.birthDate || null,
+      chip_id: v.chipId.trim() || null,
+      passport_number: v.passport.trim() || null,
+      gender: v.gender,
+      color: v.color.trim() || null,
+      weight_kg: v.weightKg ? parseFloat(v.weightKg) : null,
+      vet_notes: v.vetNotes || null,
+      owner_notes: null,
+    }).eq("id", pet.id)
+    if (!error) {
+      setBasicsStatus("saved")
+      if (basicsSavedRef.current) clearTimeout(basicsSavedRef.current)
+      basicsSavedRef.current = setTimeout(() => setBasicsStatus("idle"), 1800)
+    } else {
+      setBasicsStatus("idle")
+    }
+  }, [pet])
+
+  const saveDates = useCallback(async () => {
+    if (!pet) return
+    const v = datesRef.current
+    const supabase = createClient()
+    const { error } = await supabase.from("pets").update({
+      next_vaccine_date: v.nextVaccineDate || null,
+      next_control_date: v.nextControlDate || null,
+      vaccine_note: v.vaccineNote.trim() || null,
+    }).eq("id", pet.id)
+    if (!error) {
+      setDatesStatus("saved")
+      if (datesSavedRef.current) clearTimeout(datesSavedRef.current)
+      datesSavedRef.current = setTimeout(() => setDatesStatus("idle"), 1800)
+    } else {
+      setDatesStatus("idle")
+    }
+  }, [pet])
+
+  const triggerBasicsSave = useCallback(() => {
+    if (!loadedRef.current) return
+    setBasicsStatus("saving")
+    if (basicsDebounceRef.current) clearTimeout(basicsDebounceRef.current)
+    basicsDebounceRef.current = setTimeout(() => saveBasics(), 600)
+  }, [saveBasics])
+
+  const triggerDatesSave = useCallback(() => {
+    if (!loadedRef.current) return
+    setDatesStatus("saving")
+    if (datesDebounceRef.current) clearTimeout(datesDebounceRef.current)
+    datesDebounceRef.current = setTimeout(() => saveDates(), 600)
+  }, [saveDates])
 
   async function handleSaveApptNote(apptId: string) {
     const text = apptNotesDraft[apptId] ?? ""
@@ -362,10 +421,10 @@ export default function PetProfilePage() {
       </div>
     )
   }
-  if (error || !pet) {
+  if (loadError || !pet) {
     return (
       <div className="flex items-center justify-center h-48 text-sm font-500" style={{ color: "var(--red)" }}>
-        {error ?? "Greška."}
+        {loadError ?? "Greška."}
       </div>
     )
   }
@@ -386,14 +445,18 @@ export default function PetProfilePage() {
   if (editBreed.trim()) subtitleParts.push(editBreed.trim())
   if (ageStr) subtitleParts.push(ageStr)
 
-  const basicsRows: { label: string; value: React.ReactNode; editField: React.ReactNode }[] = [
+  const basicsRows: { label: string; editField: React.ReactNode }[] = [
     {
       label: "Vrsta",
-      value: SPECIES_LABEL[editSpecies],
       editField: (
         <select
           value={editSpecies}
-          onChange={(e) => setEditSpecies(e.target.value as Species)}
+          onChange={(e) => {
+            const v = e.target.value as Species
+            setEditSpecies(v)
+            basicsRef.current.species = v
+            triggerBasicsSave()
+          }}
           className={cn(inputEdit, "w-full cursor-pointer")}
         >
           {SPECIES_OPTIONS.map((o) => (
@@ -404,16 +467,30 @@ export default function PetProfilePage() {
     },
     {
       label: "Rasa",
-      value: editBreed || null,
-      editField: <Input value={editBreed} onChange={(e) => setEditBreed(e.target.value)} className={inputEdit} placeholder="—" />,
+      editField: (
+        <Input
+          value={editBreed}
+          onChange={(e) => {
+            setEditBreed(e.target.value)
+            basicsRef.current.breed = e.target.value
+            triggerBasicsSave()
+          }}
+          className={inputEdit}
+          placeholder="—"
+        />
+      ),
     },
     {
       label: "Pol",
-      value: GENDER_LABEL[editGender],
       editField: (
         <select
           value={editGender}
-          onChange={(e) => setEditGender(e.target.value as Gender)}
+          onChange={(e) => {
+            const v = e.target.value as Gender
+            setEditGender(v)
+            basicsRef.current.gender = v
+            triggerBasicsSave()
+          }}
           className={cn(inputEdit, "w-full cursor-pointer")}
         >
           {GENDER_OPTIONS.map((o) => (
@@ -424,33 +501,84 @@ export default function PetProfilePage() {
     },
     {
       label: "Datum rođenja",
-      value: formatDate(editBirthDate),
-      editField: <Input type="date" value={editBirthDate} onChange={(e) => setEditBirthDate(e.target.value)} className={inputEdit} />,
+      editField: (
+        <Input
+          type="date"
+          value={editBirthDate}
+          onChange={(e) => {
+            setEditBirthDate(e.target.value)
+            basicsRef.current.birthDate = e.target.value
+            triggerBasicsSave()
+          }}
+          className={inputEdit}
+        />
+      ),
     },
     {
       label: "Boja",
-      value: editColor || null,
-      editField: <Input value={editColor} onChange={(e) => setEditColor(e.target.value)} className={inputEdit} placeholder="—" />,
+      editField: (
+        <Input
+          value={editColor}
+          onChange={(e) => {
+            setEditColor(e.target.value)
+            basicsRef.current.color = e.target.value
+            triggerBasicsSave()
+          }}
+          className={inputEdit}
+          placeholder="—"
+        />
+      ),
     },
     {
       label: "Težina",
-      value: weightKg ? `${weightKg} kg` : null,
       editField: (
         <div className="flex items-center gap-1.5">
-          <Input type="number" step="0.1" min="0" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} className={cn(inputEdit, "w-24")} placeholder="—" />
+          <Input
+            type="number"
+            step="0.1"
+            min="0"
+            value={weightKg}
+            onChange={(e) => {
+              setWeightKg(e.target.value)
+              basicsRef.current.weightKg = e.target.value
+              triggerBasicsSave()
+            }}
+            className={cn(inputEdit, "w-24")}
+            placeholder="—"
+          />
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>kg</span>
         </div>
       ),
     },
     {
       label: "ID mikročipa",
-      value: editChipId ? <span className="font-mono text-xs tracking-tight">{editChipId}</span> : null,
-      editField: <Input value={editChipId} onChange={(e) => setEditChipId(e.target.value)} className={cn(inputEdit, "font-mono text-xs")} placeholder="—" />,
+      editField: (
+        <Input
+          value={editChipId}
+          onChange={(e) => {
+            setEditChipId(e.target.value)
+            basicsRef.current.chipId = e.target.value
+            triggerBasicsSave()
+          }}
+          className={cn(inputEdit, "font-mono text-xs")}
+          placeholder="—"
+        />
+      ),
     },
     {
       label: "Broj pasoša",
-      value: editPassport || null,
-      editField: <Input value={editPassport} onChange={(e) => setEditPassport(e.target.value)} className={inputEdit} placeholder="—" />,
+      editField: (
+        <Input
+          value={editPassport}
+          onChange={(e) => {
+            setEditPassport(e.target.value)
+            basicsRef.current.passport = e.target.value
+            triggerBasicsSave()
+          }}
+          className={inputEdit}
+          placeholder="—"
+        />
+      ),
     },
   ]
 
@@ -508,13 +636,7 @@ export default function PetProfilePage() {
         <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-7">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm" style={{ fontWeight: 600 }}>Podaci o ljubimcu</h3>
-            <button
-              type="button"
-              onClick={() => editingBasics ? cancelBasicsEdit() : setEditingBasics(true)}
-              className="edit-toggle p-1.5 rounded-lg"
-            >
-              {editingBasics ? <X size={14} strokeWidth={2} /> : <Pencil size={14} strokeWidth={2} />}
-            </button>
+            <SaveIndicator status={basicsStatus} />
           </div>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
             {basicsRows.map((row, i) => (
@@ -524,11 +646,7 @@ export default function PetProfilePage() {
                 style={{ borderColor: "var(--border)" }}
               >
                 <FieldLabel>{row.label}</FieldLabel>
-                {editingBasics ? (
-                  <div className="mt-1">{row.editField}</div>
-                ) : (
-                  <FieldValue mono={row.label === "ID mikročipa"}>{row.value}</FieldValue>
-                )}
+                <div className="mt-1">{row.editField}</div>
               </div>
             ))}
           </dl>
@@ -552,31 +670,12 @@ export default function PetProfilePage() {
               }}
               placeholder="Beleške o ljubimcu…"
               value={vetNotes}
-              onChange={(e) => setVetNotes(e.target.value)}
+              onChange={(e) => {
+                setVetNotes(e.target.value)
+                basicsRef.current.vetNotes = e.target.value
+                triggerBasicsSave()
+              }}
             />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-              <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-                {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
-                {saving ? "Čuvanje..." : "Sačuvaj"}
-              </button>
-            </motion.div>
-            {saved && (
-              <motion.div
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-1.5 text-sm"
-                style={{ color: "var(--green)", fontWeight: 600 }}
-              >
-                <CheckCircle size={15} strokeWidth={2.25} />
-                Sačuvano
-              </motion.div>
-            )}
-            {error && (
-              <span className="text-sm" style={{ color: "var(--red)", fontWeight: 500 }}>{error}</span>
-            )}
           </div>
         </motion.div>
 
@@ -585,6 +684,10 @@ export default function PetProfilePage() {
 
           {/* Vakcine i pregledi */}
           <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm" style={{ fontWeight: 600 }}>Termini i vakcinacija</h3>
+              <SaveIndicator status={datesStatus} />
+            </div>
             <div className="space-y-5">
               <div>
                 <div className="flex items-center gap-2 mb-3">
@@ -593,13 +696,27 @@ export default function PetProfilePage() {
                   </div>
                   <h3 className="text-sm" style={{ fontWeight: 600 }}>Sledeća vakcinacija</h3>
                 </div>
-                <Input id="vaccine" type="date" value={nextVaccineDate} onChange={(e) => setNextVaccineDate(e.target.value)} className="w-full" />
+                <Input
+                  id="vaccine"
+                  type="date"
+                  value={nextVaccineDate}
+                  onChange={(e) => {
+                    setNextVaccineDate(e.target.value)
+                    datesRef.current.nextVaccineDate = e.target.value
+                    triggerDatesSave()
+                  }}
+                  className="w-full"
+                />
                 <div className="mt-3">
                   <FieldLabel>Napomena (npr. besnilo, revakcinacija)</FieldLabel>
                   <Input
                     id="vaccineNote"
                     value={vaccineNote}
-                    onChange={(e) => setVaccineNote(e.target.value)}
+                    onChange={(e) => {
+                      setVaccineNote(e.target.value)
+                      datesRef.current.vaccineNote = e.target.value
+                      triggerDatesSave()
+                    }}
                     className="mt-1.5 w-full"
                     placeholder="Tip vakcine ili napomena..."
                   />
@@ -612,16 +729,18 @@ export default function PetProfilePage() {
                   </div>
                   <h3 className="text-sm" style={{ fontWeight: 600 }}>Sledeći kontrolni pregled</h3>
                 </div>
-                <Input id="control" type="date" value={nextControlDate} onChange={(e) => setNextControlDate(e.target.value)} className="w-full" />
+                <Input
+                  id="control"
+                  type="date"
+                  value={nextControlDate}
+                  onChange={(e) => {
+                    setNextControlDate(e.target.value)
+                    datesRef.current.nextControlDate = e.target.value
+                    triggerDatesSave()
+                  }}
+                  className="w-full"
+                />
               </div>
-            </div>
-            <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                <button type="button" onClick={handleSave} disabled={saving} className="btn-primary px-5 py-2.5 text-sm flex items-center gap-2" style={{ fontWeight: 600 }}>
-                  {saving ? <span className="animate-spin inline-block">↻</span> : <Save size={14} strokeWidth={2} />}
-                  {saving ? "Čuvanje..." : "Sačuvaj datume"}
-                </button>
-              </motion.div>
             </div>
           </motion.div>
 

@@ -237,9 +237,18 @@ export default function KlinikaDetailPage() {
       </motion.div>
 
       {/* Working hours */}
-      {hours.length > 0 && (
-        <motion.div variants={stagger.item} className="space-y-3">
-          <h2 className="text-sm px-1" style={{ fontWeight: 700 }}>Radno vreme</h2>
+      <motion.div variants={stagger.item} className="space-y-3">
+        <h2 className="text-sm px-1" style={{ fontWeight: 700 }}>Radno vreme</h2>
+        {hours.length === 0 ? (
+          <div
+            className="rounded-2xl p-6 text-center"
+            style={{ background: "var(--surface-raised)", border: "1px solid var(--border)" }}
+          >
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              Klinika još nije podesila radno vreme.
+            </p>
+          </div>
+        ) : (
           <div className="solid-card rounded-2xl divide-y divide-(--border)">
             {[1, 2, 3, 4, 5, 6, 0].map((day) => {
               const entry = hours.find((h) => h.weekday === day)
@@ -270,8 +279,8 @@ export default function KlinikaDetailPage() {
               )
             })}
           </div>
-        </motion.div>
-      )}
+        )}
+      </motion.div>
     </motion.div>
   )
 }
