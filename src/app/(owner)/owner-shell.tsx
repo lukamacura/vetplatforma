@@ -1,17 +1,18 @@
-"use client"
+﻿"use client"
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { Home, CalendarDays, CalendarCheck, PawPrint, Building2, LogOut } from "lucide-react"
+import { Home, CalendarDays, CalendarCheck, PawPrint, Building2, LogOut, MessageSquare } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 const tabs = [
-  { href: "/klijent", label: "Početna", icon: Home, exact: true },
-  { href: "/klijent/zakazivanje", label: "Zakaži", icon: CalendarDays, exact: false },
+  { href: "/klijent", label: "PoÄetna", icon: Home, exact: true },
+  { href: "/klijent/zakazivanje", label: "ZakaÅ¾i", icon: CalendarDays, exact: false },
   { href: "/klijent/kalendar", label: "Kalendar", icon: CalendarCheck, exact: false },
   { href: "/klijent/ljubimci", label: "Ljubimci", icon: PawPrint, exact: false },
-  { href: "/klijent/klinike", label: "Klinike", icon: Building2, exact: false },
+  { href: "/klijent/poruke",   label: "Poruke",   icon: MessageSquare, exact: false },
+  { href: "/klijent/klinike",  label: "Klinike",  icon: Building2,     exact: false },
 ]
 
 export function OwnerShell({ children }: { children: React.ReactNode }) {
@@ -32,7 +33,7 @@ export function OwnerShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
 
-      {/* ── Mobile header ── */}
+      {/* â”€â”€ Mobile header â”€â”€ */}
       <header
         className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4"
         style={{
@@ -68,14 +69,14 @@ export function OwnerShell({ children }: { children: React.ReactNode }) {
         </button>
       </header>
 
-      {/* ── Main content ── */}
+      {/* â”€â”€ Main content â”€â”€ */}
       <main className="content-gradient">
         <div className="relative z-1 max-w-lg mx-auto px-4 pt-[72px] pb-28">
           {children}
         </div>
       </main>
 
-      {/* ── Bottom navigation ── */}
+      {/* â”€â”€ Bottom navigation â”€â”€ */}
       <nav
         aria-label="Navigacija"
         className="fixed bottom-0 left-0 right-0 flex z-50"

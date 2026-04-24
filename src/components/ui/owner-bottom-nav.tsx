@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, CalendarDays, PawPrint, Building2 } from "lucide-react"
+import { Home, CalendarDays, PawPrint, Building2, MessageSquare } from "lucide-react"
 
 const tabs = [
-  { href: "/klijent", label: "Početna", icon: Home, exact: true },
-  { href: "/klijent/zakazivanje", label: "Zakaži", icon: CalendarDays, exact: false },
-  { href: "/klijent/ljubimci", label: "Ljubimci", icon: PawPrint, exact: false },
-  { href: "/klijent/klinike", label: "Klinike", icon: Building2, exact: false },
+  { href: "/klijent",           label: "Početna",  icon: Home,          exact: true  },
+  { href: "/klijent/zakazivanje", label: "Zakaži", icon: CalendarDays,  exact: false },
+  { href: "/klijent/ljubimci",  label: "Ljubimci", icon: PawPrint,      exact: false },
+  { href: "/klijent/poruke",    label: "Poruke",   icon: MessageSquare, exact: false },
+  { href: "/klijent/klinike",   label: "Klinike",  icon: Building2,     exact: false },
 ]
 
 export function OwnerBottomNav() {

@@ -63,6 +63,7 @@ function StatCard({
   iconClass,
   sublineStat,
   hint,
+  href,
 }: {
   icon: React.ElementType
   label: string
@@ -70,19 +71,21 @@ function StatCard({
   iconClass: string
   sublineStat?: string
   hint?: string
+  href?: string
 }) {
-  return (
-    <motion.div
-      variants={stagger.item}
-      whileHover={{ y: -3, boxShadow: "0 8px 28px rgba(0,0,0,0.09)" }}
-      className="solid-card rounded-2xl p-5 cursor-default"
-    >
+  const inner = (
+    <>
       <div className="flex items-start justify-between gap-3 mb-4">
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
           {label}
         </p>
-        <div className={`icon-sm ${iconClass}`}>
-          <Icon size={15} strokeWidth={2} />
+        <div className="flex items-center gap-2 shrink-0">
+          <div className={`icon-sm ${iconClass}`}>
+            <Icon size={15} strokeWidth={2} />
+          </div>
+          {href && (
+            <ChevronRight size={14} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+          )}
         </div>
       </div>
       <p className="text-3xl tracking-tight leading-none" style={{ color: "var(--text-primary)", fontWeight: 800 }}>
@@ -98,6 +101,26 @@ function StatCard({
           {hint}
         </p>
       )}
+    </>
+  )
+
+  if (href) {
+    return (
+      <motion.div variants={stagger.item} whileHover={{ y: -3, boxShadow: "0 8px 28px rgba(0,0,0,0.09)" }}>
+        <Link href={href} className="solid-card rounded-2xl p-5 block">
+          {inner}
+        </Link>
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div
+      variants={stagger.item}
+      whileHover={{ y: -3, boxShadow: "0 8px 28px rgba(0,0,0,0.09)" }}
+      className="solid-card rounded-2xl p-5 cursor-default"
+    >
+      {inner}
     </motion.div>
   )
 }
@@ -673,8 +696,8 @@ export default function DashboardPage() {
     : selectedDate.toLocaleDateString("sr-Latn-RS", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })
 
   const statLabel = isToday
-    ? "Zakazivanja danas"
-    : `Zakazivanja - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
+    ? "Raspored za danas"
+    : `Raspored - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
 
   const now = new Date()
   const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth()
@@ -879,6 +902,7 @@ export default function DashboardPage() {
           label={statLabel}
           value={loading ? "-" : appointments.filter((a) => a.status === "confirmed").length}
           iconClass="icon-blue"
+          href={`/dashboard/raspored?date=${dayKeyFromLocal(selectedDate)}`}
         />
         <StatCard
           icon={Users}

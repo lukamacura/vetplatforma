@@ -5,7 +5,7 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, Users, Scissors, LogOut,
-  Bell, Settings,
+  Bell, Settings, MessageSquare,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
@@ -13,6 +13,7 @@ import { createClient } from "@/lib/supabase/client"
 const navItems = [
   { href: "/dashboard",             label: "Pregled",      icon: LayoutDashboard },
   { href: "/dashboard/pacijenti",   label: "Pacijenti",    icon: Users           },
+  { href: "/dashboard/poruke",      label: "Poruke",       icon: MessageSquare   },
   { href: "/dashboard/podsetnici",  label: "Podsetnici",   icon: Bell            },
   { href: "/dashboard/usluge",      label: "Usluge",       icon: Scissors        },
   { href: "/dashboard/podesavanja", label: "Podešavanja",  icon: Settings        },
