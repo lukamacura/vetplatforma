@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useCallback, useState } from "react"
+import { useEffect, useRef, useCallback, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import {
   CalendarDays, Clock, UserX, ChevronLeft, NotebookPen,
@@ -247,7 +247,7 @@ function AppointmentRow({
 }
 
 /* ── Page ── */
-export default function RasporedPage() {
+function RasporedPageInner() {
   const searchParams = useSearchParams()
   const router       = useRouter()
 
@@ -528,5 +528,13 @@ export default function RasporedPage() {
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+export default function RasporedPage() {
+  return (
+    <Suspense>
+      <RasporedPageInner />
+    </Suspense>
   )
 }
