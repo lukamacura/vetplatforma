@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   CalendarDays, ChevronLeft, ChevronRight,
-  Lock, Check, Loader2, Syringe, Stethoscope, NotebookPen, Sparkles,
+  Eye, Check, Loader2, Syringe, Stethoscope, NotebookPen, Sparkles,
 } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
 import { PetAvatar } from "@/components/ui/pet-avatar"
@@ -640,15 +640,15 @@ export default function OwnerCalendarPage() {
             </p>
           )}
 
-          {/* Privatna beleška */}
+          {/* Beleška za dan */}
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="icon-sm icon-yellow">
+                <div className="icon-sm icon-brand">
                   <NotebookPen size={13} strokeWidth={2.25} />
                 </div>
                 <h3 className="text-sm" style={{ fontWeight: 700 }}>
-                  Privatna beleška
+                  Beleška za dan
                 </h3>
               </div>
               {/* Save indicator */}
@@ -671,14 +671,14 @@ export default function OwnerCalendarPage() {
             <div
               className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5"
               style={{
-                background: "var(--yellow-tint)",
-                color: "var(--yellow-text)",
-                border: "1px solid rgba(234,179,8,0.2)",
+                background: "var(--brand-tint)",
+                color: "var(--brand)",
+                border: "1px solid rgba(43,181,160,0.2)",
                 fontWeight: 600,
               }}
             >
-              <Lock size={11} strokeWidth={2.25} />
-              Ove beleške vidite samo Vi. Veterinar nema pristup.
+              <Eye size={11} strokeWidth={2.25} />
+              Ovu belešku vidi i Vaš veterinar.
             </div>
 
             <textarea
@@ -692,7 +692,7 @@ export default function OwnerCalendarPage() {
                   el.scrollIntoView({ behavior: "smooth", block: "center" })
                 }, 120)
               }}
-              placeholder="Napišite belešku samo za sebe — veterinar je ne vidi."
+              placeholder="Napišite belešku za ovaj dan — vidljiva i Vašem veterinaru."
               maxLength={500}
               rows={4}
               inputMode="text"

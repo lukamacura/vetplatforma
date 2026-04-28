@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import LandingNav from '@/components/landing/LandingNav'
+import LandingNav from '@/components/landing/landing-nav'
 import Link from 'next/link'
 import {
   Calendar,

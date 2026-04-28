@@ -142,7 +142,12 @@ function BookingPageInner() {
     setAvailableSlots(slots)
   }, [selectedDay, selectedService, selectedClinic, clinicHoursMap])
 
-  useEffect(() => { loadSlots() }, [loadSlots])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void loadSlots()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [loadSlots])
 
   async function handleConfirm() {
     if (!selectedPet || !selectedService || !selectedSlot || !selectedClinic || !userId) return

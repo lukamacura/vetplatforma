@@ -217,7 +217,7 @@ create policy "vet reads clinic appointments" on appointments
   );
 
 -- ------------------------------------------------------------
--- 7. Owner day notes (private per-day diary; vet NEVER sees)
+-- 7. Owner day notes (per-day diary; visible to connected vet)
 -- ------------------------------------------------------------
 create table if not exists owner_day_notes (
   owner_id   uuid not null references profiles(id) on delete cascade,
@@ -229,7 +229,19 @@ create table if not exists owner_day_notes (
 
 alter table owner_day_notes enable row level security;
 
--- Owner reads/writes own rows only. No vet policy on purpose.
+-- Owner reads/writes own rows.
 create policy "owner manages own day notes" on owner_day_notes
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid());
+
+-- Vet reads notes of owners connected to their clinic.
+create policy "vet reads connected owner day notes" on owner_day_notes
+  for select using (
+    exists (
+      select 1 from connections c
+      join profiles p on p.id = auth.uid()
+      where c.owner_id = owner_day_notes.owner_id
+        and c.clinic_id = p.clinic_id
+        and p.role = 'vet'
+    )
+  );

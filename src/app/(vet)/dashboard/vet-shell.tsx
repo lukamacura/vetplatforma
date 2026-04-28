@@ -10,6 +10,8 @@ import {
 import { motion } from "framer-motion"
 import { createClient } from "@/lib/supabase/client"
 
+const FULL_PAGE_ROUTES = ["/dashboard/poruke"]
+
 const navItems = [
   { href: "/dashboard",             label: "Pregled",      icon: LayoutDashboard },
   { href: "/dashboard/pacijenti",   label: "Pacijenti",    icon: Users           },
@@ -19,9 +21,10 @@ const navItems = [
   { href: "/dashboard/podesavanja", label: "Podešavanja",  icon: Settings        },
 ]
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function VetShell({ children, fullPage: fullPageProp }: { children: React.ReactNode; fullPage?: boolean }) {
   const pathname = usePathname()
   const router   = useRouter()
+  const fullPage = fullPageProp ?? FULL_PAGE_ROUTES.some(r => pathname.startsWith(r))
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -35,7 +38,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--bg)" }}>
+    <div className={`flex ${fullPage ? "overflow-hidden" : "min-h-screen"}`} style={{ background: "var(--bg)", ...(fullPage ? { height: "100dvh" } : {}) }}>
 
       {/* ── Sidebar (desktop only) — dark clinical spine ── */}
       <aside
@@ -132,11 +135,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── Main ── */}
-      <main className="flex-1 overflow-auto content-gradient md:ml-58">
-        <div className="relative z-1 p-5 pt-18 md:pt-8 md:p-8 max-w-7xl mx-auto pb-28 md:pb-8">
-          {children}
-        </div>
-      </main>
+      {fullPage ? (
+        <main className="flex-1 overflow-hidden flex flex-col md:ml-58">
+          {/* Space below the fixed mobile header */}
+          <div className="md:hidden shrink-0" style={{ height: 56 }} />
+          <div className="flex-1 min-h-0 flex overflow-hidden">
+            {children}
+          </div>
+          {/* Space above the fixed mobile bottom nav */}
+          <div className="md:hidden shrink-0" style={{ height: 60, paddingBottom: "env(safe-area-inset-bottom, 0px)" }} />
+        </main>
+      ) : (
+        <main className="flex-1 overflow-auto content-gradient md:ml-58">
+          <div className="relative z-1 p-5 pt-18 md:pt-8 md:p-8 max-w-7xl mx-auto pb-28 md:pb-8">
+            {children}
+          </div>
+        </main>
+      )}
 
       {/* ── Bottom nav (mobile only) — all 5 destinations ── */}
       <nav

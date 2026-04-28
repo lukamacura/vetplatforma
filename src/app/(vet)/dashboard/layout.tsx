@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { DashboardShell } from "./dashboard-shell"
+import { VetShell } from "./vet-shell"
 
 /**
  * Vet-facing authenticated area. Explicitly `noindex` so sensitive
@@ -21,5 +21,5 @@ export const metadata: Metadata = {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <DashboardShell>{children}</DashboardShell>
+  return <VetShell>{children}</VetShell>
 }

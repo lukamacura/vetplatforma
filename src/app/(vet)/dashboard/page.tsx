@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
-import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, ChevronDown, CalendarPlus, Banknote, Sparkles, Syringe, Stethoscope, NotebookPen, Lock, Loader2, Check } from "lucide-react"
+import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, ChevronDown, CalendarPlus, MessageSquare, Sparkles, Syringe, Stethoscope, NotebookPen, Lock, Loader2, Check, Eye } from "lucide-react"
 import { AnimatePresence, motion } from "framer-motion"
 import Link from "next/link"
 import { PetAvatar } from "@/components/ui/pet-avatar"
@@ -136,6 +136,7 @@ function AppointmentRow({
   noteDraft,
   onNoteDraftChange,
   noteStatus,
+  ownerDayNote,
 }: {
   appt: AppointmentWithDetails
   isToday: boolean
@@ -146,6 +147,7 @@ function AppointmentRow({
   noteDraft: string
   onNoteDraftChange: (id: string, value: string) => void
   noteStatus: "idle" | "saving" | "saved"
+  ownerDayNote?: string
 }) {
   const now   = new Date()
   const start = new Date(appt.scheduled_at)
@@ -290,66 +292,97 @@ function AppointmentRow({
             transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
             className="overflow-hidden"
           >
-            <div
-              className="rounded-xl p-3 mt-2 space-y-2"
-              style={{
-                background: "linear-gradient(135deg, var(--yellow-tint) 0%, #FEFCE8 100%)",
-                border: "1px solid rgba(234,179,8,0.22)",
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="icon-sm icon-yellow shrink-0">
-                    <NotebookPen size={12} strokeWidth={2.25} />
-                  </div>
-                  <h4 className="text-xs truncate" style={{ fontWeight: 700 }}>
-                    Beleška sa posete
-                  </h4>
-                </div>
-                <div className="flex items-center gap-1 text-[11px] shrink-0" style={{ minHeight: 16 }}>
-                  {noteStatus === "saving" && (
-                    <>
-                      <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
-                      <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
-                    </>
-                  )}
-                  {noteStatus === "saved" && (
-                    <>
-                      <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
-                      <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
-                    </>
-                  )}
-                </div>
-              </div>
+            <div className="mt-2 space-y-2">
 
+              {/* Owner day note — shown first so vet reads it before writing their own */}
+              {ownerDayNote && ownerDayNote.trim().length > 0 && (
+                <div
+                  className="rounded-xl p-3 space-y-1.5"
+                  style={{
+                    background: "linear-gradient(135deg, var(--brand-tint) 0%, #E6F7F5 100%)",
+                    border: "1px solid rgba(43,181,160,0.22)",
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="icon-sm icon-brand shrink-0">
+                      <Eye size={12} strokeWidth={2.25} />
+                    </div>
+                    <h4 className="text-xs" style={{ fontWeight: 700 }}>
+                      Beleška vlasnika za ovaj dan
+                    </h4>
+                  </div>
+                  <p
+                    className="text-sm px-1"
+                    style={{ color: "var(--text-primary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}
+                  >
+                    {ownerDayNote}
+                  </p>
+                </div>
+              )}
+
+              {/* Vet private note — owner never sees this */}
               <div
-                className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5"
+                className="rounded-xl p-3 space-y-2"
                 style={{
-                  background: "rgba(255,255,255,0.6)",
-                  color: "var(--yellow-text)",
+                  background: "linear-gradient(135deg, var(--yellow-tint) 0%, #FEFCE8 100%)",
                   border: "1px solid rgba(234,179,8,0.22)",
-                  fontWeight: 600,
                 }}
               >
-                <Lock size={11} strokeWidth={2.25} />
-                Privatna beleška (vlasnik ne vidi)
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="icon-sm icon-yellow shrink-0">
+                      <NotebookPen size={12} strokeWidth={2.25} />
+                    </div>
+                    <h4 className="text-xs truncate" style={{ fontWeight: 700 }}>
+                      Vaša beleška sa posete
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] shrink-0" style={{ minHeight: 16 }}>
+                    {noteStatus === "saving" && (
+                      <>
+                        <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
+                        <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
+                      </>
+                    )}
+                    {noteStatus === "saved" && (
+                      <>
+                        <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
+                        <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5"
+                  style={{
+                    background: "rgba(255,255,255,0.6)",
+                    color: "var(--yellow-text)",
+                    border: "1px solid rgba(234,179,8,0.22)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <Lock size={11} strokeWidth={2.25} />
+                  Privatna beleška — vlasnik ne vidi
+                </div>
+
+                <textarea
+                  value={noteDraft}
+                  onChange={(e) => onNoteDraftChange(appt.id, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  placeholder="Dodaj beleške za ovu posetu…"
+                  rows={3}
+                  className="w-full rounded-xl px-3 py-2 text-sm resize-y outline-none transition-all"
+                  style={{
+                    background: "rgba(255,255,255,0.85)",
+                    border: "1px solid rgba(234,179,8,0.25)",
+                    color: "var(--text-primary)",
+                    minHeight: 80,
+                    lineHeight: 1.55,
+                  }}
+                />
               </div>
 
-              <textarea
-                value={noteDraft}
-                onChange={(e) => onNoteDraftChange(appt.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                placeholder="Dodaj beleške za ovu posetu…"
-                rows={3}
-                className="w-full rounded-xl px-3 py-2 text-sm resize-y outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.85)",
-                  border: "1px solid rgba(234,179,8,0.25)",
-                  color: "var(--text-primary)",
-                  minHeight: 80,
-                  lineHeight: 1.55,
-                }}
-              />
             </div>
           </motion.div>
         )}
@@ -369,9 +402,8 @@ export default function DashboardPage() {
   const [appointments,    setAppointments]    = useState<AppointmentWithDetails[]>([])
   const [monthDotCounts,  setMonthDotCounts]  = useState<Record<string, number>>({})
   const [monthReminders,  setMonthReminders]  = useState<VetReminder[]>([])
-  const [monthlyRevenue,        setMonthlyRevenue]        = useState<number | null>(null)
-  const [monthlyApptCount,      setMonthlyApptCount]      = useState(0)
-  const [monthlyCancelledCount, setMonthlyCancelledCount] = useState(0)
+  const [unreadCount,     setUnreadCount]     = useState(0)
+  const [vetId,           setVetId]           = useState<string | null>(null)
   const [connectedCount,  setConnectedCount]  = useState(0)
   const [clinicName,      setClinicName]      = useState("")
   const [clinicId,        setClinicId]        = useState<string | null>(null)
@@ -385,6 +417,7 @@ export default function DashboardPage() {
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
   const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
   const [apptNoteStatus, setApptNoteStatus] = useState<Record<string, "idle" | "saving" | "saved">>({})
+  const [ownerDayNotes, setOwnerDayNotes] = useState<Record<string, string>>({})
 
   const debounceRefs  = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const savedHideRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -479,6 +512,7 @@ export default function DashboardPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
+      setVetId(user.id)
 
       const { data: profile } = await supabase
         .from("profiles").select("clinic_id").eq("id", user.id).single()
@@ -553,6 +587,21 @@ export default function DashboardPage() {
       } else {
         setAppointments([])
       }
+
+      // Fetch owner notes for this day — RLS restricts to connected owners automatically.
+      // Runs regardless of whether appointments exist on this day.
+      const dayKey = dayKeyFromLocal(dayStart)
+      const { data: noteRows } = await supabase
+        .from("owner_day_notes")
+        .select("owner_id, note")
+        .eq("day", dayKey)
+        .neq("note", "")
+      const noteMap: Record<string, string> = {}
+      for (const row of noteRows ?? []) {
+        if (row.note?.trim()) noteMap[row.owner_id] = row.note
+      }
+      setOwnerDayNotes(noteMap)
+
       setLoading(false)
     }
     loadAppointments()
@@ -638,56 +687,21 @@ export default function DashboardPage() {
   const selectedDayKey    = dayKeyFromLocal(selectedDate)
   const selectedReminders = remindersByKey[selectedDayKey] ?? []
 
-  // Load planned revenue for the viewed month: sum services.price_rsd
-  // over non-cancelled / non-no-show appointments.
+  // Load total unread messages count for this vet
   useEffect(() => {
-    if (!clinicId) return
-    async function loadMonthlyRevenue() {
+    if (!clinicId || !vetId) return
+    async function loadUnread() {
       const supabase = createClient()
-      const monthStart = new Date(viewYear, viewMonth, 1)
-      const monthEnd   = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999)
-
-      const { data: apptRows } = await supabase
-        .from("appointments").select("service_id, status")
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
         .eq("clinic_id", clinicId)
-        .gte("scheduled_at", monthStart.toISOString())
-        .lte("scheduled_at", monthEnd.toISOString())
-
-      if (!apptRows?.length) {
-        setMonthlyRevenue(0)
-        setMonthlyApptCount(0)
-        setMonthlyCancelledCount(0)
-        return
-      }
-
-      const serviceIds = [...new Set(apptRows.map((a) => a.service_id))]
-      const { data: svcRows } = await supabase
-        .from("services").select("id, price_rsd")
-        .in("id", serviceIds)
-
-      const priceMap: Record<string, number> = Object.fromEntries(
-        (svcRows ?? []).map((s) => [s.id, s.price_rsd ?? 0])
-      )
-
-      let revenue = 0
-      let confirmed = 0
-      let cancelled = 0
-      for (const row of apptRows) {
-        if (row.status === "cancelled") {
-          cancelled += 1
-          continue
-        }
-        if (row.status === "no_show") continue
-        revenue += priceMap[row.service_id] ?? 0
-        confirmed += 1
-      }
-
-      setMonthlyRevenue(revenue)
-      setMonthlyApptCount(confirmed)
-      setMonthlyCancelledCount(cancelled)
+        .eq("receiver_id", vetId)
+        .eq("is_read", false)
+      setUnreadCount(count ?? 0)
     }
-    loadMonthlyRevenue()
-  }, [clinicId, viewYear, viewMonth])
+    loadUnread()
+  }, [clinicId, vetId])
 
   const monthGrid = getMonthGrid(viewYear, viewMonth)
 
@@ -699,19 +713,6 @@ export default function DashboardPage() {
     ? "Raspored za danas"
     : `Raspored - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}`
 
-  const now = new Date()
-  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth()
-  const viewedMonthName = new Date(viewYear, viewMonth).toLocaleDateString("sr-Latn-RS", { month: "long" })
-  const revenueLabel = isCurrentMonth
-    ? "Planirani prihod ovog meseca"
-    : `Planirani prihod - ${viewedMonthName}`
-  const revenueValue = monthlyRevenue === null
-    ? "-"
-    : `${monthlyRevenue.toLocaleString("sr-Latn-RS")} RSD`
-  const revenueSubline = monthlyRevenue === null
-    ? undefined
-    : `${monthlyApptCount} ${monthlyApptCount === 1 ? "termin zakazan" : "termina zakazano"}` +
-      (monthlyCancelledCount > 0 ? ` · ${monthlyCancelledCount} otkazano` : "")
 
   return (
     <motion.div
@@ -909,14 +910,14 @@ export default function DashboardPage() {
           label="Povezani klijenti"
           value={loading ? "-" : connectedCount}
           iconClass="icon-brand"
+          href="/dashboard/pacijenti"
         />
         <StatCard
-          icon={Banknote}
-          label={revenueLabel}
-          value={revenueValue}
-          iconClass="icon-green"
-          sublineStat={revenueSubline}
-          hint="Ne uračunava otkazane termine."
+          icon={MessageSquare}
+          label="Nepročitanih poruka"
+          value={loading ? "-" : unreadCount}
+          iconClass="icon-blue"
+          href="/dashboard/poruke"
         />
 
       </div>
@@ -957,6 +958,41 @@ export default function DashboardPage() {
 
           {/* Card body */}
           <div className="p-4">
+
+            {/* Owner day notes — shown before the appointment list */}
+            {Object.keys(ownerDayNotes).length > 0 && (
+              <div className="space-y-2 mb-3">
+                {Object.entries(ownerDayNotes).map(([ownerId, note]) => {
+                  const ownerName = appointments.find((a) => a.owner_id === ownerId)?.owner_name
+                  return (
+                    <div
+                      key={ownerId}
+                      className="rounded-xl p-3 space-y-1.5"
+                      style={{
+                        background: "linear-gradient(135deg, var(--brand-tint) 0%, #E6F7F5 100%)",
+                        border: "1px solid rgba(43,181,160,0.22)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="icon-sm icon-brand shrink-0">
+                          <Eye size={12} strokeWidth={2.25} />
+                        </div>
+                        <h4 className="text-xs" style={{ fontWeight: 700 }}>
+                          {ownerName ? `Beleška — ${ownerName}` : "Beleška vlasnika"}
+                        </h4>
+                      </div>
+                      <p
+                        className="text-sm px-1"
+                        style={{ color: "var(--text-primary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}
+                      >
+                        {note}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             {noShowError && (
               <div
                 className="rounded-xl px-4 py-3 mb-3 text-sm"
@@ -1001,6 +1037,7 @@ export default function DashboardPage() {
                     noteDraft={apptNotesDraft[a.id] ?? a.vet_notes ?? ""}
                     onNoteDraftChange={handleNoteDraftChange}
                     noteStatus={apptNoteStatus[a.id] ?? "idle"}
+                    ownerDayNote={ownerDayNotes[a.owner_id]}
                   />
                 ))}
               </motion.div>

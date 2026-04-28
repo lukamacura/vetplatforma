@@ -42,7 +42,7 @@ function RegisterFormInner() {
       email,
       password,
       options: {
-        data: { role: "owner", full_name: fullName, phone: phone || null },
+        data: { role: "owner", full_name: fullName, phone },
       },
     })
 
@@ -60,7 +60,7 @@ function RegisterFormInner() {
         id: userId,
         role: "owner",
         full_name: fullName,
-        phone: phone || null,
+        phone,
       })
 
     if (clinicSlug) {
@@ -110,13 +110,14 @@ function RegisterFormInner() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone">Telefon (opcionalno)</Label>
+              <Label htmlFor="phone">Telefon</Label>
               <Input
                 id="phone"
                 type="tel"
                 placeholder="06x xxx xxxx"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                required
               />
             </div>
 

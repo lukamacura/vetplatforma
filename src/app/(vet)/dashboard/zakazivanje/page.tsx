@@ -193,7 +193,12 @@ function VetBookingPageInner() {
     setLoadingSlots(false)
   }, [selectedDate, selectedService, clinicId, clinicBuffer, clinicHoursMap])
 
-  useEffect(() => { loadSlots() }, [loadSlots])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void loadSlots()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [loadSlots])
 
   async function handleConfirm() {
     if (!selectedRow || !selectedService || !selectedSlot || !clinicId) return

@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
 
     const role = profile?.role ?? (user.user_metadata?.role as string | undefined)
 
-    if (role === 'vet' && pathname.startsWith('/klijent')) {
+    if (role === 'vet' && !pathname.startsWith('/dashboard') && !pathname.startsWith('/join') && !pathname.startsWith('/login') && !pathname.startsWith('/register') && !pathname.startsWith('/vets') && pathname !== '/') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     if (role === 'owner' && pathname.startsWith('/dashboard')) {

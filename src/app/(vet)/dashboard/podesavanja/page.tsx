@@ -1,14 +1,14 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback, useTransition } from "react"
-import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2, Timer, ImageIcon, X } from "lucide-react"
+import { Settings, Copy, Check, Clock, CreditCard, CheckCircle2, AlertTriangle, Loader2, Timer, ImageIcon, X, Scissors } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
-import { createCheckoutSession, createBillingPortalSession } from "@/app/dashboard/upgrade/actions"
-import type { ClinicHours } from "@/lib/types"
+import { createCheckoutSession, createBillingPortalSession } from "@/app/(vet)/dashboard/upgrade/actions"
+import type { ClinicHours, Service } from "@/lib/types"
 
 const WEEKDAYS = [
   { index: 1, label: "Ponedeljak" },
@@ -81,6 +81,7 @@ export default function PodesavanjaPage() {
   const [isPending,      startTransition]   = useTransition()
 
   const [hoursStatus,  setHoursStatus]  = useState<SaveStatus>("idle")
+  const [services,     setServices]     = useState<Service[]>([])
   const hoursSavedRef     = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hoursDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -183,6 +184,11 @@ export default function PodesavanjaPage() {
           )
         }
       }
+
+      const { data: svcData } = await supabase
+        .from("services").select("*").eq("clinic_id", cid).order("created_at")
+      setServices((svcData as Service[]) ?? [])
+
       setLoading(false)
       loadedRef.current = true
     }
@@ -758,6 +764,76 @@ export default function PodesavanjaPage() {
           >
             {bufferError}
           </p>
+        )}
+      </motion.div>
+
+      {/* ── Service pricing — full width ── */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-6">
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="icon-md icon-brand">
+              <Scissors size={16} strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="text-sm" style={{ fontWeight: 700 }}>Cenovnik usluga</h2>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Upravljajte uslugama na stranici Usluge.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {services.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nema dodanih usluga.</p>
+          </div>
+        ) : (
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            <div
+              className="grid px-4 py-2.5 text-xs uppercase tracking-wider"
+              style={{
+                gridTemplateColumns: "1fr auto auto",
+                background: "var(--surface-raised)",
+                color: "var(--text-muted)",
+                fontWeight: 700,
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <span>Usluga</span>
+              <span className="text-right pr-6">Trajanje</span>
+              <span className="text-right">Cena</span>
+            </div>
+            {services.map((s, i) => (
+              <div
+                key={s.id}
+                className="grid items-center px-4 py-3"
+                style={{
+                  gridTemplateColumns: "1fr auto auto",
+                  borderBottom: i < services.length - 1 ? "1px solid var(--border)" : "none",
+                  background: s.is_active ? "var(--surface)" : "var(--surface-raised)",
+                  opacity: s.is_active ? 1 : 0.6,
+                }}
+              >
+                <div className="min-w-0 pr-4">
+                  <p className="text-sm truncate" style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                    {s.name}
+                  </p>
+                  {!s.is_active && (
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>Neaktivno</p>
+                  )}
+                </div>
+                <span className="text-sm tabular-nums pr-6" style={{ color: "var(--text-muted)" }}>
+                  {s.duration_minutes} min
+                </span>
+                <span className="text-sm tabular-nums font-bold" style={{ color: "var(--brand)" }}>
+                  {s.price_rsd.toLocaleString("sr-Latn-RS")} RSD
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </motion.div>
 
