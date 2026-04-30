@@ -1,18 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
-import { CalendarDays, Users, Clock, ChevronRight, UserX, ChevronLeft, ChevronDown, CalendarPlus, MessageSquare, Sparkles, Syringe, Stethoscope, NotebookPen, Lock, Loader2, Check, Eye } from "lucide-react"
-import { AnimatePresence, motion } from "framer-motion"
+import { useEffect, useMemo, useState } from "react"
+import { CalendarDays, Users, ChevronRight, ChevronLeft, CalendarPlus, MessageSquare, Sparkles, Syringe, Stethoscope, Eye, UserPlus, Check, ChevronDown, Phone } from "lucide-react"
+import { motion } from "framer-motion"
 import Link from "next/link"
 import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import { SPECIES_LABEL } from "@/lib/species"
 import type { AppointmentWithDetails, Species } from "@/lib/types"
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
-}
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() &&
@@ -125,272 +121,6 @@ function StatCard({
   )
 }
 
-/* ── Appointment row ── */
-function AppointmentRow({
-  appt,
-  isToday,
-  onNoShow,
-  onUndoNoShow,
-  isExpanded,
-  onToggleExpand,
-  noteDraft,
-  onNoteDraftChange,
-  noteStatus,
-  ownerDayNote,
-}: {
-  appt: AppointmentWithDetails
-  isToday: boolean
-  onNoShow: (id: string) => void
-  onUndoNoShow: (id: string) => void
-  isExpanded: boolean
-  onToggleExpand: (id: string) => void
-  noteDraft: string
-  onNoteDraftChange: (id: string, value: string) => void
-  noteStatus: "idle" | "saving" | "saved"
-  ownerDayNote?: string
-}) {
-  const now   = new Date()
-  const start = new Date(appt.scheduled_at)
-  const end   = new Date(start.getTime() + appt.service_duration * 60_000)
-  const isNow      = isToday && now >= start && now <= end
-  const isPast     = isToday && now > end
-  const isNoShow   = appt.status === "no_show"
-  const isCancelled = appt.status === "cancelled"
-
-  const timeColor = isNoShow || isCancelled ? "var(--text-muted)" : isNow ? "var(--blue)" : isPast ? "var(--text-muted)" : "var(--blue)"
-
-  const isActive = isNow && !isNoShow && !isCancelled
-  const hasNotes = !!(appt.vet_notes && appt.vet_notes.trim().length > 0)
-
-  return (
-    <motion.div variants={stagger.row} className="space-y-0">
-      <div
-        className={`appt-row flex items-center gap-4 rounded-xl px-4 py-3 cursor-pointer ${isActive ? "appt-row-active" : ""}`}
-        style={{
-          opacity: (isPast || isNoShow || isCancelled) ? 0.5 : 1,
-        }}
-        role="button"
-        tabIndex={0}
-        onClick={() => onToggleExpand(appt.id)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            onToggleExpand(appt.id)
-          }
-        }}
-      >
-        {/* Time column */}
-        <div className="w-13 shrink-0 text-center">
-          <span className="text-sm tabular-nums leading-none" style={{ color: timeColor, fontWeight: 700 }}>
-            {formatTime(appt.scheduled_at)}
-          </span>
-          {isNow && !isNoShow && !isCancelled && (
-            <span className="badge badge-blue mt-1 block text-center" style={{ fontSize: 9, padding: "2px 6px" }}>
-              <span className="pulse-dot" />
-              SADA
-            </span>
-          )}
-        </div>
-
-        {/* Divider */}
-        <div
-          className="w-px self-stretch rounded-full shrink-0"
-          style={{ background: isNow && !isNoShow && !isCancelled ? "var(--blue)" : "var(--border)" }}
-        />
-
-        {/* Pet + service */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <PetAvatar photoUrl={appt.pet_photo_url} species={appt.pet_species} size={22} />
-            <span
-              className="text-sm truncate"
-              style={{
-                color: "var(--text-primary)",
-                fontWeight: 600,
-                textDecoration: isCancelled ? "line-through" : "none",
-              }}
-            >
-              {appt.pet_name}
-            </span>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              · {SPECIES_LABEL[appt.pet_species]}
-            </span>
-            {hasNotes && !isExpanded && (
-              <NotebookPen
-                size={11}
-                strokeWidth={2.25}
-                style={{ color: "var(--yellow)", opacity: 0.85 }}
-                aria-label="Ima belešku"
-              />
-            )}
-          </div>
-          <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
-            {appt.service_name} · {appt.owner_name}
-          </p>
-        </div>
-
-        {/* Status badges + actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          {isCancelled ? (
-            <span className="badge badge-muted">Otkazano</span>
-          ) : (
-            <>
-              <div className="badge badge-blue" style={{ gap: 4 }}>
-                <Clock size={11} strokeWidth={2} />
-                {appt.service_duration} min
-              </div>
-              {isToday && (isPast || isNow) && (
-                isNoShow ? (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onUndoNoShow(appt.id) }}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all"
-                    style={{ background: "rgba(220,38,38,0.1)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.2)" }}
-                  >
-                    <UserX size={11} strokeWidth={2} />
-                    Nije došao
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onNoShow(appt.id) }}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-all"
-                    style={{ background: "rgba(22,163,74,0.1)", color: "var(--green)", fontWeight: 600, border: "1px solid rgba(22,163,74,0.2)" }}
-                  >
-                    <Check size={11} strokeWidth={2.5} />
-                    Došao
-                  </button>
-                )
-              )}
-              {!isToday && isNoShow && (
-                <span className="badge badge-red">
-                  <UserX size={10} strokeWidth={2} />
-                  Nije došao
-                </span>
-              )}
-            </>
-          )}
-          <ChevronDown
-            size={14}
-            strokeWidth={2}
-            className="transition-transform duration-200"
-            style={{
-              color: "var(--text-muted)",
-              transform: isExpanded ? "rotate(180deg)" : undefined,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Yellow private-notes editor - mirrors owner's "Privatna beleška" psychology */}
-      <AnimatePresence initial={false}>
-        {isExpanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="overflow-hidden"
-          >
-            <div className="mt-2 space-y-2">
-
-              {/* Owner day note — shown first so vet reads it before writing their own */}
-              {ownerDayNote && ownerDayNote.trim().length > 0 && (
-                <div
-                  className="rounded-xl p-3 space-y-1.5"
-                  style={{
-                    background: "linear-gradient(135deg, var(--brand-tint) 0%, #E6F7F5 100%)",
-                    border: "1px solid rgba(43,181,160,0.22)",
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="icon-sm icon-brand shrink-0">
-                      <Eye size={12} strokeWidth={2.25} />
-                    </div>
-                    <h4 className="text-xs" style={{ fontWeight: 700 }}>
-                      Beleška vlasnika za ovaj dan
-                    </h4>
-                  </div>
-                  <p
-                    className="text-sm px-1"
-                    style={{ color: "var(--text-primary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}
-                  >
-                    {ownerDayNote}
-                  </p>
-                </div>
-              )}
-
-              {/* Vet private note — owner never sees this */}
-              <div
-                className="rounded-xl p-3 space-y-2"
-                style={{
-                  background: "linear-gradient(135deg, var(--yellow-tint) 0%, #FEFCE8 100%)",
-                  border: "1px solid rgba(234,179,8,0.22)",
-                }}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="icon-sm icon-yellow shrink-0">
-                      <NotebookPen size={12} strokeWidth={2.25} />
-                    </div>
-                    <h4 className="text-xs truncate" style={{ fontWeight: 700 }}>
-                      Vaša beleška sa posete
-                    </h4>
-                  </div>
-                  <div className="flex items-center gap-1 text-[11px] shrink-0" style={{ minHeight: 16 }}>
-                    {noteStatus === "saving" && (
-                      <>
-                        <Loader2 size={11} strokeWidth={2.25} className="animate-spin" style={{ color: "var(--text-muted)" }} />
-                        <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Čuvanje…</span>
-                      </>
-                    )}
-                    {noteStatus === "saved" && (
-                      <>
-                        <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
-                        <span style={{ color: "var(--green)", fontWeight: 600 }}>Sačuvano</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div
-                  className="flex items-center gap-1.5 text-[11px] rounded-lg px-2.5 py-1.5"
-                  style={{
-                    background: "rgba(255,255,255,0.6)",
-                    color: "var(--yellow-text)",
-                    border: "1px solid rgba(234,179,8,0.22)",
-                    fontWeight: 600,
-                  }}
-                >
-                  <Lock size={11} strokeWidth={2.25} />
-                  Privatna beleška — vlasnik ne vidi
-                </div>
-
-                <textarea
-                  value={noteDraft}
-                  onChange={(e) => onNoteDraftChange(appt.id, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  placeholder="Dodaj beleške za ovu posetu…"
-                  rows={3}
-                  className="w-full rounded-xl px-3 py-2 text-sm resize-y outline-none transition-all"
-                  style={{
-                    background: "rgba(255,255,255,0.85)",
-                    border: "1px solid rgba(234,179,8,0.25)",
-                    color: "var(--text-primary)",
-                    minHeight: 80,
-                    lineHeight: 1.55,
-                  }}
-                />
-              </div>
-
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  )
-}
-
 /* ── Page ── */
 export default function DashboardPage() {
   const today = new Date()
@@ -409,102 +139,14 @@ export default function DashboardPage() {
   const [clinicId,        setClinicId]        = useState<string | null>(null)
   const [loading,         setLoading]         = useState(true)
 
+  type PendingConn = { id: string; owner_id: string; connected_at: string; owner_name: string; phone: string | null }
+  const [pendingRequests,  setPendingRequests]  = useState<PendingConn[]>([])
+  const [approvingId,      setApprovingId]      = useState<string | null>(null)
+  const [expandedPendingId, setExpandedPendingId] = useState<string | null>(null)
+
   const isToday = isSameDay(selectedDate, new Date())
 
-  const [noShowError, setNoShowError] = useState<string | null>(null)
-
-  // Per-appointment vet notes editor state (debounced auto-save)
-  const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
-  const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
-  const [apptNoteStatus, setApptNoteStatus] = useState<Record<string, "idle" | "saving" | "saved">>({})
   const [ownerDayNotes, setOwnerDayNotes] = useState<Record<string, string>>({})
-
-  const debounceRefs  = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const savedHideRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
-  const handleNoShow = useCallback(async (id: string) => {
-    setNoShowError(null)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("appointments")
-      .update({ status: "no_show" })
-      .eq("id", id)
-    if (error) {
-      setNoShowError("Greška pri označavanju statusa. Pokušajte ponovo.")
-    } else {
-      setAppointments((prev) =>
-        prev.map((a) => a.id === id ? { ...a, status: "no_show" } : a)
-      )
-    }
-  }, [])
-
-  const handleUndoNoShow = useCallback(async (id: string) => {
-    setNoShowError(null)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("appointments")
-      .update({ status: "confirmed" })
-      .eq("id", id)
-    if (error) {
-      setNoShowError("Greška pri poništavanju statusa. Pokušajte ponovo.")
-    } else {
-      setAppointments((prev) =>
-        prev.map((a) => a.id === id ? { ...a, status: "confirmed" } : a)
-      )
-    }
-  }, [])
-
-  const saveApptNote = useCallback(async (id: string, value: string) => {
-    const text = value.trim()
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("appointments")
-      .update({ vet_notes: text || null })
-      .eq("id", id)
-    if (error) {
-      setApptNoteStatus((prev) => ({ ...prev, [id]: "idle" }))
-      return
-    }
-    setAppointments((prev) =>
-      prev.map((a) => a.id === id ? { ...a, vet_notes: text || null } : a)
-    )
-    setApptNoteStatus((prev) => ({ ...prev, [id]: "saved" }))
-    if (savedHideRefs.current[id]) clearTimeout(savedHideRefs.current[id])
-    savedHideRefs.current[id] = setTimeout(() => {
-      setApptNoteStatus((prev) => ({ ...prev, [id]: "idle" }))
-    }, 1800)
-  }, [])
-
-  const handleToggleExpand = useCallback((id: string) => {
-    setExpandedApptId((prev) => (prev === id ? null : id))
-    setApptNotesDraft((prev) => {
-      if (id in prev) return prev
-      const existing = appointments.find((a) => a.id === id)
-      return { ...prev, [id]: existing?.vet_notes ?? "" }
-    })
-  }, [appointments])
-
-  const handleNoteDraftChange = useCallback((id: string, value: string) => {
-    setApptNotesDraft((prev) => ({ ...prev, [id]: value }))
-    setApptNoteStatus((prev) => ({ ...prev, [id]: "saving" }))
-    if (debounceRefs.current[id]) clearTimeout(debounceRefs.current[id])
-    debounceRefs.current[id] = setTimeout(() => { saveApptNote(id, value) }, 600)
-  }, [saveApptNote])
-
-  // Collapse the expanded row when switching to a different day
-  useEffect(() => {
-    setExpandedApptId(null)
-  }, [selectedDate])
-
-  // Flush pending debounces on unmount
-  useEffect(() => {
-    const debounces = debounceRefs.current
-    const hides     = savedHideRefs.current
-    return () => {
-      for (const t of Object.values(debounces)) clearTimeout(t)
-      for (const t of Object.values(hides))     clearTimeout(t)
-    }
-  }, [])
 
   // Initial load: get clinic info + connected count
   useEffect(() => {
@@ -533,10 +175,31 @@ export default function DashboardPage() {
 
       setClinicId(cid)
 
-      const { count } = await supabase
-        .from("connections").select("id", { count: "exact", head: true })
-        .eq("clinic_id", cid)
+      const [{ count }, { data: pendingConns }] = await Promise.all([
+        supabase
+          .from("connections").select("id", { count: "exact", head: true })
+          .eq("clinic_id", cid)
+          .eq("status", "confirmed"),
+        supabase
+          .from("connections").select("id, owner_id, connected_at")
+          .eq("clinic_id", cid)
+          .eq("status", "pending"),
+      ])
       setConnectedCount(count ?? 0)
+
+      if (pendingConns?.length) {
+        const ownerIds = pendingConns.map((c) => c.owner_id)
+        const { data: profiles } = await supabase
+          .from("profiles").select("id, full_name, phone").in("id", ownerIds)
+        const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]))
+        setPendingRequests(pendingConns.map((c) => ({
+          id: c.id,
+          owner_id: c.owner_id,
+          connected_at: c.connected_at,
+          owner_name: profileMap[c.owner_id]?.full_name ?? "Nepoznat vlasnik",
+          phone: profileMap[c.owner_id]?.phone ?? null,
+        })))
+      }
     }
     init()
   }, [])
@@ -642,6 +305,7 @@ export default function DashboardPage() {
       const { data: connRows } = await supabase
         .from("connections").select("owner_id")
         .eq("clinic_id", clinicId)
+        .eq("status", "confirmed")
       const ownerIds = [...new Set((connRows ?? []).map((c) => c.owner_id))]
       if (ownerIds.length === 0) { setMonthReminders([]); return }
 
@@ -675,6 +339,51 @@ export default function DashboardPage() {
     }
     loadMonthReminders()
   }, [clinicId, viewYear, viewMonth])
+
+  // Realtime: listen for new pending connection requests
+  useEffect(() => {
+    if (!clinicId) return
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`connections-vet-${clinicId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "connections",
+          filter: `clinic_id=eq.${clinicId}`,
+        },
+        async (payload) => {
+          const row = payload.new as { id: string; owner_id: string; connected_at: string; status: string }
+          if (row.status !== "pending") return
+          const supabase2 = createClient()
+          const { data: profile } = await supabase2
+            .from("profiles").select("full_name, phone").eq("id", row.owner_id).single()
+          setPendingRequests((prev) => [
+            ...prev,
+            {
+              id: row.id,
+              owner_id: row.owner_id,
+              connected_at: row.connected_at,
+              owner_name: profile?.full_name ?? "Nepoznat vlasnik",
+              phone: profile?.phone ?? null,
+            },
+          ])
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [clinicId])
+
+  async function handleApprove(connId: string) {
+    setApprovingId(connId)
+    const supabase = createClient()
+    await supabase.from("connections").update({ status: "confirmed" }).eq("id", connId)
+    setPendingRequests((prev) => prev.filter((c) => c.id !== connId))
+    setConnectedCount((n) => n + 1)
+    setApprovingId(null)
+  }
 
   const remindersByKey = useMemo(() => {
     const m: Record<string, VetReminder[]> = {}
@@ -922,136 +631,218 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* Day detail - Schedule + Podsetnici side-by-side on desktop */}
+      {/* Pending connection requests */}
+      {pendingRequests.length > 0 && (
+        <motion.div
+          variants={stagger.item}
+          className="rounded-2xl overflow-hidden"
+          style={{ border: "1.5px solid rgba(217,119,6,0.3)", background: "var(--surface)" }}
+        >
+          <div
+            className="flex items-center justify-between gap-3 px-5 py-4"
+            style={{ borderBottom: "1px solid rgba(217,119,6,0.2)", background: "linear-gradient(135deg, rgba(217,119,6,0.06) 0%, transparent 100%)" }}
+          >
+            <div className="flex items-center gap-2">
+              <div className="icon-sm icon-amber shrink-0">
+                <UserPlus size={13} strokeWidth={2.25} />
+              </div>
+              <div>
+                <h3 className="text-sm" style={{ fontWeight: 700 }}>Zahtevi za povezivanje</h3>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {pendingRequests.length} {pendingRequests.length === 1 ? "vlasnik čeka odobrenje" : "vlasnika čeka odobrenje"}
+                </p>
+              </div>
+            </div>
+            <span className="badge badge-amber">
+              <UserPlus size={11} strokeWidth={2} />
+              {pendingRequests.length}
+            </span>
+          </div>
+          <div className="p-4 space-y-2">
+            {pendingRequests.map((req) => {
+              const expanded = expandedPendingId === req.id
+              return (
+                <div
+                  key={req.id}
+                  className="rounded-xl overflow-hidden"
+                  style={{ border: "1px solid rgba(217,119,6,0.15)" }}
+                >
+                  {/* Summary row — click to toggle details */}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPendingId(expanded ? null : req.id)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
+                    style={{ background: "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)" }}
+                  >
+                    <div className="icon-sm icon-amber shrink-0">
+                      <UserPlus size={13} strokeWidth={2} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm" style={{ fontWeight: 600 }}>{req.owner_name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        Zahtev za povezivanje
+                      </p>
+                    </div>
+                    <ChevronDown
+                      size={14}
+                      strokeWidth={2}
+                      style={{
+                        color: "var(--amber)",
+                        transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.2s ease",
+                        flexShrink: 0,
+                      }}
+                    />
+                  </button>
+
+                  {/* Expanded info panel */}
+                  {expanded && (
+                    <div
+                      className="px-4 pb-4 pt-3 space-y-3"
+                      style={{ borderTop: "1px solid rgba(217,119,6,0.12)", background: "#FFFDF5" }}
+                    >
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
+                          Kontakt
+                        </p>
+                        {req.phone ? (
+                          <a
+                            href={`tel:${req.phone}`}
+                            className="inline-flex items-center gap-2 text-sm"
+                            style={{ color: "var(--brand)", fontWeight: 600 }}
+                          >
+                            <Phone size={13} strokeWidth={2.25} />
+                            {req.phone}
+                          </a>
+                        ) : (
+                          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Broj telefona nije unet</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)", fontWeight: 700 }}>
+                          Datum zahteva
+                        </p>
+                        <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+                          {new Date(req.connected_at).toLocaleDateString("sr-Latn-RS", {
+                            day: "2-digit", month: "long", year: "numeric",
+                          })}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(req.id)}
+                        disabled={approvingId === req.id}
+                        className="w-full rounded-xl px-3 py-2 text-xs flex items-center justify-center gap-1.5 transition-all"
+                        style={{
+                          background: "var(--brand-tint)",
+                          color: "var(--brand)",
+                          border: "1px solid rgba(43,181,160,0.25)",
+                          fontWeight: 600,
+                          opacity: approvingId === req.id ? 0.6 : 1,
+                        }}
+                      >
+                        <Check size={11} strokeWidth={2.5} />
+                        {approvingId === req.id ? "Odobravnje..." : "Odobri povezivanje"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Day detail — Beleške vlasnika + Podsetnici side-by-side */}
       <div className="grid grid-cols-1 gap-4 lg:gap-5 lg:grid-cols-2 items-start">
 
-        {/* Schedule card */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
+        {/* Beleške vlasnika card */}
+        <motion.div variants={stagger.item} className="rounded-2xl overflow-hidden h-full" style={{ border: "1.5px solid rgba(43,181,160,0.30)", background: "var(--surface)" }}>
 
           {/* Card header */}
           <div
             className="flex items-center justify-between gap-3 px-5 py-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
+            style={{ borderBottom: "1px solid rgba(43,181,160,0.20)", background: "linear-gradient(135deg, rgba(43,181,160,0.07) 0%, transparent 100%)" }}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <div className="icon-sm icon-blue shrink-0">
-                <CalendarDays size={13} strokeWidth={2.25} />
+              <div className="icon-sm icon-brand shrink-0">
+                <Eye size={13} strokeWidth={2.25} />
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
-                  {isToday ? "Raspored za danas" : `Raspored - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+                  {isToday ? "Beleške vlasnika" : `Beleške vlasnika - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
                 </h3>
-                {!loading && appointments.length > 0 && (
+                {Object.keys(ownerDayNotes).length > 0 && (
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {appointments.length} {appointments.length === 1 ? "termin" : "termina"}
+                    {Object.keys(ownerDayNotes).length}{" "}
+                    {Object.keys(ownerDayNotes).length === 1 ? "beleška" : "beleški"}
                   </p>
                 )}
               </div>
             </div>
-            {!loading && appointments.length > 0 && (
-              <span className="badge badge-blue shrink-0">
-                <CalendarDays size={11} strokeWidth={2} />
-                {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
-              </span>
-            )}
+            <span className="badge badge-brand shrink-0">
+              <Eye size={11} strokeWidth={2} />
+              {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
+            </span>
           </div>
 
           {/* Card body */}
           <div className="p-4">
-
-            {/* Owner day notes — shown before the appointment list */}
-            {Object.keys(ownerDayNotes).length > 0 && (
-              <div className="space-y-2 mb-3">
-                {Object.entries(ownerDayNotes).map(([ownerId, note]) => {
-                  const ownerName = appointments.find((a) => a.owner_id === ownerId)?.owner_name
-                  return (
-                    <div
-                      key={ownerId}
-                      className="rounded-xl p-3 space-y-1.5"
-                      style={{
-                        background: "linear-gradient(135deg, var(--brand-tint) 0%, #E6F7F5 100%)",
-                        border: "1px solid rgba(43,181,160,0.22)",
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="icon-sm icon-brand shrink-0">
-                          <Eye size={12} strokeWidth={2.25} />
-                        </div>
-                        <h4 className="text-xs" style={{ fontWeight: 700 }}>
-                          {ownerName ? `Beleška — ${ownerName}` : "Beleška vlasnika"}
-                        </h4>
-                      </div>
-                      <p
-                        className="text-sm px-1"
-                        style={{ color: "var(--text-primary)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}
-                      >
-                        {note}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {noShowError && (
-              <div
-                className="rounded-xl px-4 py-3 mb-3 text-sm"
-                style={{ background: "var(--red-tint)", color: "var(--red)", fontWeight: 600, border: "1px solid rgba(220,38,38,0.18)" }}
-              >
-                {noShowError}
-              </div>
-            )}
-            {loading ? (
-              <div className="space-y-2.5 py-1">
-                {[...Array(3)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-14 rounded-xl animate-pulse"
-                    style={{ background: "var(--surface-raised)" }}
-                  />
-                ))}
-              </div>
-            ) : appointments.length === 0 ? (
+            {Object.keys(ownerDayNotes).length === 0 ? (
               <div className="py-14 text-center">
-                <div className="icon-lg icon-blue mx-auto mb-4">
-                  <CalendarDays size={22} strokeWidth={1.75} />
+                <div className="icon-lg icon-brand mx-auto mb-4">
+                  <Eye size={22} strokeWidth={1.75} />
                 </div>
                 <p className="text-sm mb-1" style={{ fontWeight: 600 }}>
-                  {isToday ? "Nema zakazivanja za danas" : "Nema zakazivanja za ovaj dan"}
+                  {isToday ? "Nema beleški vlasnika za danas" : "Nema beleški vlasnika za ovaj dan"}
                 </p>
                 <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
-                  Vlasnici mogu zakazati termin sami - bez telefonskog poziva.
+                  Vlasnici mogu ostaviti poruku za kliniku uz termin.
                 </p>
               </div>
             ) : (
-              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
-                {appointments.map((a) => (
-                  <AppointmentRow
-                    key={a.id}
-                    appt={a}
-                    isToday={isToday}
-                    onNoShow={handleNoShow}
-                    onUndoNoShow={handleUndoNoShow}
-                    isExpanded={expandedApptId === a.id}
-                    onToggleExpand={handleToggleExpand}
-                    noteDraft={apptNotesDraft[a.id] ?? a.vet_notes ?? ""}
-                    onNoteDraftChange={handleNoteDraftChange}
-                    noteStatus={apptNoteStatus[a.id] ?? "idle"}
-                    ownerDayNote={ownerDayNotes[a.owner_id]}
-                  />
-                ))}
+              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-3">
+                {Object.entries(ownerDayNotes).map(([ownerId, note]) => {
+                  const ownerName = appointments.find((a) => a.owner_id === ownerId)?.owner_name
+                  return (
+                    <motion.div
+                      key={ownerId}
+                      variants={stagger.row}
+                      className="rounded-xl p-4 space-y-2"
+                      style={{
+                        background: "linear-gradient(135deg, var(--brand-tint) 0%, #dff4f1 100%)",
+                        border: "1px solid rgba(43,181,160,0.22)",
+                      }}
+                    >
+                      <p
+                        className="text-xs"
+                        style={{ fontWeight: 700, color: "var(--brand)", letterSpacing: "0.04em", textTransform: "uppercase" }}
+                      >
+                        {ownerName ?? "Vlasnik"}
+                      </p>
+                      <p
+                        className="text-sm leading-relaxed"
+                        style={{ color: "var(--text-primary)", whiteSpace: "pre-wrap" }}
+                      >
+                        {note}
+                      </p>
+                    </motion.div>
+                  )
+                })}
               </motion.div>
             )}
           </div>
         </motion.div>
 
         {/* Podsetnici card - vaccines & controls for the selected day */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl overflow-hidden h-full">
+        <motion.div variants={stagger.item} className="rounded-2xl overflow-hidden h-full" style={{ border: "1.5px solid rgba(217,119,6,0.22)", background: "var(--surface)" }}>
 
           {/* Card header */}
           <div
             className="flex items-center justify-between gap-3 px-5 py-4"
-            style={{ borderBottom: "1px solid var(--border)" }}
+            style={{ borderBottom: "1px solid rgba(217,119,6,0.18)", background: "linear-gradient(135deg, rgba(217,119,6,0.06) 0%, transparent 100%)" }}
           >
             <div className="flex items-center gap-2 min-w-0">
               <div className="icon-sm icon-amber shrink-0">

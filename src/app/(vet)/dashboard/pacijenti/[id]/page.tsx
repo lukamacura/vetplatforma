@@ -627,6 +627,37 @@ export default function PetProfilePage() {
             <DateStatusBadge date={nextControlDate || pet.next_control_date} icon={Stethoscope} label="Pregled" />
           </div>
         </div>
+
+        {/* Pet notes in hero so vet sees them immediately */}
+        <div className="mt-4 pt-4 rounded-xl px-3 py-3" style={{ borderTop: "1px solid var(--border)", background: "color-mix(in srgb, var(--red) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--red) 25%, transparent)" }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <span
+              className="text-[10px] uppercase tracking-wider flex items-center gap-1.5"
+              style={{ color: "var(--red)", fontWeight: 700, letterSpacing: "0.08em" }}
+            >
+              <span className="pulse-dot" style={{ background: "var(--red)", boxShadow: "0 0 0 3px color-mix(in srgb, var(--red) 20%, transparent)" }} />
+              Beleške o ljubimcu
+            </span>
+            <SaveIndicator status={basicsStatus} />
+          </div>
+          <textarea
+            className="vet-notes-textarea w-full min-h-[64px] rounded-xl text-sm resize-y px-3 py-2"
+            style={{
+              background: "color-mix(in srgb, var(--red) 4%, var(--surface-raised))",
+              color: "var(--text-primary)",
+              lineHeight: 1.6,
+              fontFamily: "inherit",
+              border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)",
+            }}
+            placeholder="Beleške o ljubimcu…"
+            value={vetNotes}
+            onChange={(e) => {
+              setVetNotes(e.target.value)
+              basicsRef.current.vetNotes = e.target.value
+              triggerBasicsSave()
+            }}
+          />
+        </div>
       </motion.div>
 
       {/* Body: 3-column on lg+ */}
@@ -634,9 +665,8 @@ export default function PetProfilePage() {
 
         {/* Left column: Podaci o ljubimcu */}
         <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-5">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center mb-4">
             <h3 className="text-sm" style={{ fontWeight: 600 }}>Podaci o ljubimcu</h3>
-            <SaveIndicator status={basicsStatus} />
           </div>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0">
             {basicsRows.map((row, i) => (
@@ -651,32 +681,6 @@ export default function PetProfilePage() {
             ))}
           </dl>
 
-          <div className="mt-5 pt-4" style={{ borderTop: "1px solid var(--border)" }}>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span
-                className="text-[10px] uppercase tracking-wider"
-                style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}
-              >
-                Beleške o ljubimcu
-              </span>
-            </div>
-            <textarea
-              className="vet-notes-textarea w-full min-h-[80px] rounded-xl text-sm resize-y px-3 py-2 mt-1.5"
-              style={{
-                background: "var(--surface-raised)",
-                color: "var(--text-primary)",
-                lineHeight: 1.6,
-                fontFamily: "inherit",
-              }}
-              placeholder="Beleške o ljubimcu…"
-              value={vetNotes}
-              onChange={(e) => {
-                setVetNotes(e.target.value)
-                basicsRef.current.vetNotes = e.target.value
-                triggerBasicsSave()
-              }}
-            />
-          </div>
         </motion.div>
 
         {/* Middle column: Podsetnici */}

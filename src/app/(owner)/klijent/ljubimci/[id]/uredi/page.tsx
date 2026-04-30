@@ -52,7 +52,7 @@ export default function EditPetPage() {
         .eq("owner_id", user.id)
         .single()
 
-      if (!data) { router.push("/klijent/ljubimci"); return }
+      if (!data) { router.push("/klijent"); return }
 
       const pet = data as Pick<Pet, "id" | "name" | "species" | "breed" | "gender" | "chip_id" | "passport_number" | "birth_date" | "color" | "weight_kg" | "photo_url" | "vet_notes" | "owner_notes">
       setName(pet.name)

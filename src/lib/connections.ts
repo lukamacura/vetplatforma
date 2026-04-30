@@ -49,8 +49,8 @@ export async function connectOwnerToClinicBySlug(
   const { error: connErr } = await supabase
     .from("connections")
     .upsert(
-      { owner_id: ownerId, clinic_id: clinic.id },
-      { onConflict: "owner_id,clinic_id" }
+      { owner_id: ownerId, clinic_id: clinic.id, status: "pending" },
+      { onConflict: "owner_id,clinic_id", ignoreDuplicates: true }
     )
   if (connErr) {
     return {

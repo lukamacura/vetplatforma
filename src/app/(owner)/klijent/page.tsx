@@ -99,6 +99,7 @@ export default function OwnerHomePage() {
   const [ownerName, setOwnerName] = useState("")
   const [clinic, setClinic] = useState<ClinicInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hasPendingConn, setHasPendingConn] = useState(false)
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
@@ -117,12 +118,13 @@ export default function OwnerHomePage() {
 
       const { data: conn } = await supabase
         .from("connections")
-        .select("clinic_id")
+        .select("clinic_id, status")
         .eq("owner_id", user.id)
         .limit(1)
         .single()
 
-      if (conn?.clinic_id) {
+      if (conn?.status === "pending") setHasPendingConn(true)
+      if (conn?.clinic_id && conn.status === "confirmed") {
         const { data: clinicData } = await supabase
           .from("clinics")
           .select("id, name, description, logo_url, address")
@@ -270,6 +272,29 @@ export default function OwnerHomePage() {
           Zdravstveni podaci i termini Vaših ljubimaca
         </p>
       </motion.div>
+
+      {/* ── Pending connection banner ── */}
+      {hasPendingConn && !clinic && (
+        <motion.div variants={stagger.item}>
+          <div
+            className="rounded-2xl p-4 flex items-center gap-3"
+            style={{
+              background: "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)",
+              border: "1px solid rgba(217,119,6,0.2)",
+            }}
+          >
+            <div className="icon-sm shrink-0" style={{ background: "rgba(217,119,6,0.12)", color: "var(--amber)", borderRadius: 8 }}>
+              <Clock size={14} strokeWidth={2.25} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm" style={{ fontWeight: 700 }}>Zahtev čeka odobrenje</p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Veterinarska klinika još nije odobrila vaš zahtev za povezivanje.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Clinic card ── */}
       {clinic && (
@@ -642,16 +667,14 @@ export default function OwnerHomePage() {
             </div>
             <h2 className="text-sm" style={{ fontWeight: 700 }}>Vaši ljubimci</h2>
           </div>
-          {pets.length > 0 && (
-            <Link
-              href="/klijent/ljubimci"
-              className="flex items-center gap-1 text-xs"
-              style={{ color: "var(--brand)", fontWeight: 600 }}
-            >
-              Svi
-              <ChevronRight size={14} strokeWidth={2} />
-            </Link>
-          )}
+          <Link
+            href="/klijent/ljubimci/novi"
+            className="flex items-center gap-1 text-xs"
+            style={{ color: "var(--brand)", fontWeight: 600 }}
+          >
+            Dodaj ljubimca
+            <ChevronRight size={14} strokeWidth={2} />
+          </Link>
         </div>
 
         {pets.length === 0 ? (
