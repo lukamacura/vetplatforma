@@ -3,13 +3,17 @@
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
+<<<<<<< HEAD
 import { Home, CalendarDays, PawPrint, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
+=======
+import { Home, CalendarDays, CalendarCheck, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
+>>>>>>> a0be8c770fbebcdba9df7b51490cea575c1cea83
 import { createClient } from "@/lib/supabase/client"
 
 const tabs = [
   { href: "/klijent",               label: "Početna",  icon: Home,          exact: true  },
   { href: "/klijent/zakazivanje",   label: "Zakaži",   icon: CalendarDays,  exact: false },
-  { href: "/klijent/ljubimci",      label: "Ljubimci", icon: PawPrint,      exact: false },
+  { href: "/klijent/kalendar",      label: "Kalendar", icon: CalendarCheck, exact: false },
   { href: "/klijent/poruke",        label: "Poruke",   icon: MessageSquare, exact: false },
   { href: "/klijent/klinike",       label: "Klinike",  icon: Building2,     exact: false },
   { href: "/klijent/podesavanja",   label: "Nalog",    icon: UserCircle,    exact: false },

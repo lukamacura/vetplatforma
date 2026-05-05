@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Search, Building2, PawPrint, Check, MapPin } from "lucide-react"
+import { Search, Building2, PawPrint, Check, MapPin, Clock } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
 
@@ -14,9 +14,11 @@ type ClinicRow = {
   logo_url: string | null
 }
 
+type ConnStatus = "pending" | "confirmed"
+
 export default function KlinikePage() {
   const [clinics, setClinics] = useState<ClinicRow[]>([])
-  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set())
+  const [connMap, setConnMap] = useState<Map<string, ConnStatus>>(new Map())
   const [search, setSearch] = useState("")
   const [busyClinicId, setBusyClinicId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -31,26 +33,52 @@ export default function KlinikePage() {
 
       const [{ data: clinicsData }, { data: connsData }] = await Promise.all([
         supabase.from("clinics").select("id, name, description, address, logo_url").order("name"),
-        supabase.from("connections").select("clinic_id").eq("owner_id", user.id),
+        supabase.from("connections").select("clinic_id, status").eq("owner_id", user.id),
       ])
 
       setClinics((clinicsData as ClinicRow[]) ?? [])
-      setConnectedIds(new Set((connsData ?? []).map((c) => c.clinic_id)))
+      const map = new Map<string, ConnStatus>()
+      for (const c of (connsData ?? [])) {
+        map.set(c.clinic_id, c.status as ConnStatus)
+      }
+      setConnMap(map)
       setLoading(false)
     }
     load()
   }, [])
+
+  // Realtime: listen for vet approval (UPDATE on own connections)
+  useEffect(() => {
+    if (!userId) return
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`connections-owner-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "connections",
+          filter: `owner_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as { clinic_id: string; status: ConnStatus }
+          if (row.status === "confirmed") {
+            setConnMap((prev) => new Map(prev).set(row.clinic_id, "confirmed"))
+          }
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [userId])
 
   async function handleConnect(e: React.MouseEvent, clinicId: string) {
     e.preventDefault()
     if (!userId) return
     setBusyClinicId(clinicId)
     const supabase = createClient()
-    await supabase.from("connections").upsert(
-      { owner_id: userId, clinic_id: clinicId },
-      { onConflict: "owner_id,clinic_id" },
-    )
-    setConnectedIds((prev) => new Set([...prev, clinicId]))
+    await supabase.from("connections").insert({ owner_id: userId, clinic_id: clinicId, status: "pending" })
+    setConnMap((prev) => new Map(prev).set(clinicId, "pending"))
     setBusyClinicId(null)
   }
 
@@ -60,8 +88,8 @@ export default function KlinikePage() {
     setBusyClinicId(clinicId)
     const supabase = createClient()
     await supabase.from("connections").delete().eq("owner_id", userId).eq("clinic_id", clinicId)
-    setConnectedIds((prev) => {
-      const next = new Set(prev)
+    setConnMap((prev) => {
+      const next = new Map(prev)
       next.delete(clinicId)
       return next
     })
@@ -115,7 +143,7 @@ export default function KlinikePage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((clinic) => {
-            const isConnected = connectedIds.has(clinic.id)
+            const status = connMap.get(clinic.id)
             const busy = busyClinicId === clinic.id
             return (
               <div key={clinic.id} className="relative solid-card rounded-2xl p-4 transition-all">
@@ -146,10 +174,16 @@ export default function KlinikePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
-                      {isConnected && (
+                      {status === "confirmed" && (
                         <span className="inline-flex items-center gap-1 text-[11px] shrink-0" style={{ color: "var(--green)", fontWeight: 600 }}>
                           <Check size={10} strokeWidth={3} />
                           Povezani
+                        </span>
+                      )}
+                      {status === "pending" && (
+                        <span className="inline-flex items-center gap-1 text-[11px] shrink-0" style={{ color: "var(--amber)", fontWeight: 600 }}>
+                          <Clock size={10} strokeWidth={2.5} />
+                          Čeka odobrenje
                         </span>
                       )}
                     </div>
@@ -171,7 +205,7 @@ export default function KlinikePage() {
 
                 {/* Connect action */}
                 <div className="relative z-10 mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid var(--border)" }}>
-                  {isConnected ? (
+                  {status === "confirmed" ? (
                     <button
                       type="button"
                       onClick={(e) => handleDisconnect(e, clinic.id)}
@@ -187,6 +221,19 @@ export default function KlinikePage() {
                     >
                       {busy ? "..." : "Prekini vezu"}
                     </button>
+                  ) : status === "pending" ? (
+                    <span
+                      className="rounded-xl px-3 py-1.5 text-xs inline-flex items-center gap-1.5"
+                      style={{
+                        background: "var(--amber-tint)",
+                        color: "var(--amber)",
+                        border: "1px solid rgba(217,119,6,0.2)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <Clock size={11} strokeWidth={2.5} />
+                      Čeka odobrenje
+                    </span>
                   ) : (
                     <button
                       type="button"

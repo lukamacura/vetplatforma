@@ -13,6 +13,8 @@ import {
   Stethoscope,
   ChevronRight,
   AlertCircle,
+  List,
+  Users,
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
@@ -84,6 +86,13 @@ function StatusDot({ date, icon: Icon }: { date: string | null; icon: React.Elem
 }
 
 type FilterMode = "all" | "overdue" | "upcoming"
+type ViewMode = "pets" | "owners"
+
+interface OwnerGroup {
+  owner: PetRow["owner"]
+  pets: PetRow[]
+  hasOverdue: boolean
+}
 
 function CopyLinkButton({ url }: { url: string }) {
   const [copied, setCopied] = useState(false)
@@ -203,11 +212,117 @@ function PetRowCard({ row, onClick }: { row: PetRow; index: number; onClick: () 
   )
 }
 
+function OwnerGroupCard({ group, onPetClick }: { group: OwnerGroup; onPetClick: (petId: string) => void }) {
+  const { owner, pets, hasOverdue } = group
+
+  return (
+    <motion.div
+      variants={stagger.row}
+      className="solid-card rounded-xl overflow-hidden"
+    >
+      {/* Owner header */}
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-raised)" }}
+      >
+        <div
+          className="icon-sm shrink-0"
+          style={{
+            borderRadius: "50%",
+            background: hasOverdue ? "color-mix(in srgb, var(--red) 12%, transparent)" : "var(--brand-tint)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Users
+            size={14}
+            strokeWidth={2}
+            style={{ color: hasOverdue ? "var(--red)" : "var(--brand)" }}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm truncate" style={{ fontWeight: 650, color: "var(--text-primary)" }}>
+            {owner.full_name || "—"}
+          </span>
+          {owner.phone && (
+            <p className="text-[11px] mt-0.5 flex items-center gap-1 truncate" style={{ color: "var(--text-muted)" }}>
+              <Phone size={9} strokeWidth={2} className="shrink-0" />
+              {owner.phone}
+            </p>
+          )}
+        </div>
+        <span className="text-[11px] shrink-0" style={{ color: "var(--text-muted)" }}>
+          {pets.length} {pets.length === 1 ? "ljubimac" : pets.length < 5 ? "ljubimca" : "ljubimaca"}
+        </span>
+      </div>
+
+      {/* Pet rows */}
+      <div>
+        {pets.map((row, i) => {
+          const { pet } = row
+          const isOverdue =
+            (pet.next_vaccine_date && new Date(pet.next_vaccine_date) < new Date()) ||
+            (pet.next_control_date && new Date(pet.next_control_date) < new Date())
+          const age = ageLabelShort(pet.birth_date)
+          const genderStr = pet.gender ? GENDER_LABEL[pet.gender] : ""
+          const subtitleParts = [SPECIES_LABEL[pet.species]]
+          if (pet.breed) subtitleParts.push(pet.breed)
+          if (genderStr) subtitleParts.push(genderStr)
+          if (age) subtitleParts.push(age)
+          if (pet.weight_kg) subtitleParts.push(`${pet.weight_kg}kg`)
+
+          return (
+            <motion.button
+              key={pet.id}
+              type="button"
+              onClick={() => onPetClick(pet.id)}
+              whileHover={{ background: "var(--surface-raised)" }}
+              className="w-full text-left cursor-pointer transition-colors"
+              style={{
+                borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+              }}
+            >
+              <div className="flex items-center gap-3 px-4 py-2.5 pl-6">
+                <PetAvatar
+                  photoUrl={pet.photo_url}
+                  species={pet.species}
+                  size={34}
+                  rounded="xl"
+                  outline={isOverdue ? "2px solid var(--red)" : undefined}
+                  outlineOffset="1px"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm truncate" style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                      {pet.name}
+                    </span>
+                    {isOverdue && <AlertCircle size={12} strokeWidth={2.5} style={{ color: "var(--red)", flexShrink: 0 }} />}
+                  </div>
+                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                    {subtitleParts.join(" · ")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <StatusDot date={pet.next_vaccine_date} icon={Syringe} />
+                  <StatusDot date={pet.next_control_date} icon={Stethoscope} />
+                </div>
+                <ChevronRight size={14} strokeWidth={1.75} className="shrink-0" style={{ color: "var(--text-muted)" }} />
+              </div>
+            </motion.button>
+          )
+        })}
+      </div>
+    </motion.div>
+  )
+}
+
 export default function PatientsPage() {
   const router = useRouter()
   const [rows, setRows] = useState<PetRow[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterMode, setFilterMode] = useState<FilterMode>("all")
+  const [viewMode, setViewMode] = useState<ViewMode>("pets")
   const [clinicSlug, setClinicSlug] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -311,6 +426,22 @@ export default function PatientsPage() {
     return result
   }, [rows, searchTerm, filterMode])
 
+  const ownerGroups = useMemo<OwnerGroup[]>(() => {
+    const map = new Map<string, OwnerGroup>()
+    for (const row of filtered) {
+      const id = row.owner.id
+      if (!map.has(id)) map.set(id, { owner: row.owner, pets: [], hasOverdue: false })
+      const group = map.get(id)!
+      group.pets.push(row)
+      const vs = dateStatus(row.pet.next_vaccine_date)
+      const cs = dateStatus(row.pet.next_control_date)
+      if (vs === "overdue" || cs === "overdue") group.hasOverdue = true
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      (a.owner.full_name ?? "").localeCompare(b.owner.full_name ?? "", "sr")
+    )
+  }, [filtered])
+
   const joinUrl = clinicSlug
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/join/${clinicSlug}`
     : null
@@ -397,17 +528,55 @@ export default function PatientsPage() {
               </button>
             )
           })}
+
+          {/* Divider */}
+          <div className="w-px h-5 mx-0.5" style={{ background: "var(--border)" }} />
+
+          {/* View toggle */}
+          {(
+            [
+              { key: "pets" as ViewMode, Icon: List, title: "Po ljubimcu" },
+              { key: "owners" as ViewMode, Icon: Users, title: "Po vlasniku" },
+            ] as const
+          ).map(({ key, Icon, title }) => {
+            const active = viewMode === key
+            return (
+              <button
+                key={key}
+                type="button"
+                title={title}
+                onClick={() => setViewMode(key)}
+                className="flex items-center justify-center rounded-lg transition-all"
+                style={{
+                  width: 32,
+                  height: 32,
+                  background: active ? "var(--brand-tint)" : "transparent",
+                  color: active ? "var(--brand)" : "var(--text-muted)",
+                  border: active ? "1px solid color-mix(in srgb, var(--brand) 25%, transparent)" : "1px solid transparent",
+                }}
+              >
+                <Icon size={15} strokeWidth={active ? 2.25 : 1.75} />
+              </button>
+            )
+          })}
         </div>
       </motion.div>
 
       {/* Column header hint — desktop only */}
-      {!loading && filtered.length > 0 && (
+      {!loading && filtered.length > 0 && viewMode === "pets" && (
         <div className="hidden sm:flex items-center gap-3 px-4 text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}>
           <div className="w-10 shrink-0" />
           <div className="flex-1">Pacijent</div>
           <div className="shrink-0" style={{ width: "auto" }}>Status</div>
           <div className="w-px h-3 shrink-0" />
           <div className="shrink-0" style={{ width: 180 }}>Vlasnik</div>
+          <div className="w-4 shrink-0" />
+        </div>
+      )}
+      {!loading && filtered.length > 0 && viewMode === "owners" && (
+        <div className="hidden sm:flex items-center gap-3 px-4 text-[10px] uppercase tracking-wider" style={{ color: "var(--text-muted)", fontWeight: 600, letterSpacing: "0.08em" }}>
+          <div className="flex-1">Vlasnik / Ljubimci</div>
+          <div className="shrink-0">Status</div>
           <div className="w-4 shrink-0" />
         </div>
       )}
@@ -446,7 +615,7 @@ export default function PatientsPage() {
             </p>
           )}
         </motion.div>
-      ) : (
+      ) : viewMode === "pets" ? (
         <AnimatePresence mode="popLayout">
           <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-1.5">
             {filtered.map((row, i) => (
@@ -455,6 +624,18 @@ export default function PatientsPage() {
                 row={row}
                 index={i}
                 onClick={() => router.push(`/dashboard/pacijenti/${row.pet.id}`)}
+              />
+            ))}
+          </motion.div>
+        </AnimatePresence>
+      ) : (
+        <AnimatePresence mode="popLayout">
+          <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
+            {ownerGroups.map((group) => (
+              <OwnerGroupCard
+                key={group.owner.id}
+                group={group}
+                onPetClick={(petId) => router.push(`/dashboard/pacijenti/${petId}`)}
               />
             ))}
           </motion.div>
