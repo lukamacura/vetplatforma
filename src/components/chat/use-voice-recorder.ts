@@ -16,8 +16,10 @@ export function useVoiceRecorder() {
   const audioChunksRef   = useRef<Blob[]>([])
   const recordTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
   const mimeTypeRef      = useRef<string>("audio/webm")
+  const startTsRef       = useRef<number>(0)
 
   async function start() {
+    if (mediaRecorderRef.current) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg"
@@ -27,6 +29,7 @@ export function useVoiceRecorder() {
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
       mr.start(100)
       mediaRecorderRef.current = mr
+      startTsRef.current = Date.now()
       setRecording(true)
       setRecordSeconds(0)
       recordTimerRef.current = setInterval(() => setRecordSeconds(s => s + 1), 1000)
@@ -38,17 +41,19 @@ export function useVoiceRecorder() {
   async function stop(): Promise<VoiceRecording | null> {
     const mr = mediaRecorderRef.current
     if (!mr) return null
-    if (recordTimerRef.current) clearInterval(recordTimerRef.current)
-    const duration = recordSeconds
+    if (recordTimerRef.current) { clearInterval(recordTimerRef.current); recordTimerRef.current = null }
+    const duration = Math.max(1, Math.round((Date.now() - startTsRef.current) / 1000))
 
     await new Promise<void>(resolve => {
       mr.onstop = () => resolve()
-      mr.stop()
+      try { mr.stop() } catch { resolve() }
       mr.stream.getTracks().forEach(t => t.stop())
     })
 
     const mimeType = mimeTypeRef.current
     const blob = new Blob(audioChunksRef.current, { type: mimeType })
+    mediaRecorderRef.current = null
+    audioChunksRef.current = []
     setRecording(false)
     setRecordSeconds(0)
     if (blob.size === 0) return null

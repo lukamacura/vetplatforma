@@ -35,8 +35,18 @@ export function ChatInput({
   }
 
   function handleSend() {
+    if (recording) {
+      onStopRecording()
+      return
+    }
+    if (!text.trim()) return
     onSendText()
     if (taRef.current) taRef.current.style.height = "auto"
+  }
+
+  function handleMicClick() {
+    if (recording) onStopRecording()
+    else onStartRecording()
   }
 
   return (
@@ -53,7 +63,7 @@ export function ChatInput({
               Snimanje... {fmtDuration(recordSeconds)}
             </span>
             <span style={{ fontSize: 12, color: "var(--text-muted)", marginLeft: "auto" }}>
-              Otpusti za slanje
+              Pritisni ✓ za slanje
             </span>
           </motion.div>
         )}
@@ -118,11 +128,8 @@ export function ChatInput({
         />
 
         <button
-          onMouseDown={onStartRecording}
-          onMouseUp={onStopRecording}
-          onTouchStart={e => { e.preventDefault(); onStartRecording() }}
-          onTouchEnd={e => { e.preventDefault(); onStopRecording() }}
-          disabled={disabled}
+          onClick={handleMicClick}
+          disabled={disabled || sending}
           className="flex items-center justify-center rounded-xl flex-shrink-0 transition-all hover:scale-105 active:scale-95"
           style={{
             width: 40, height: 40,
@@ -130,21 +137,21 @@ export function ChatInput({
             border: `1px solid ${recording ? "var(--red)" : "var(--border)"}`,
             opacity: disabled ? 0.5 : 1,
           }}
-          title="Drži za glasovnu poruku"
+          title={recording ? "Otkaži snimanje" : "Snimi glasovnu poruku"}
         >
           {recording ? <MicOff size={18} color="#fff" /> : <Mic size={18} style={{ color: "var(--text-secondary)" }} />}
         </button>
 
         <button
           onClick={handleSend}
-          disabled={!text.trim() || sending || disabled}
+          disabled={(!text.trim() && !recording) || sending || disabled}
           className="flex items-center justify-center rounded-xl flex-shrink-0 transition-all hover:scale-105 active:scale-95"
           style={{
             width: 40, height: 40, padding: 0,
             background: "linear-gradient(135deg, var(--brand) 0%, #239684 100%)",
             boxShadow: "0 2px 8px rgba(43,181,160,0.4)",
             border: "none",
-            opacity: !text.trim() || sending || disabled ? 0.45 : 1,
+            opacity: (!text.trim() && !recording) || sending || disabled ? 0.45 : 1,
           }}
         >
           <Check size={18} color="#fff" strokeWidth={2.5} />

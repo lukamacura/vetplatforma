@@ -34,8 +34,12 @@ export default function PorukePage() {
 
   const voice = useVoiceRecorder()
 
-  const bottomRef  = useRef<HTMLDivElement>(null)
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const bottomRef    = useRef<HTMLDivElement>(null)
+  const channelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const selectedRef  = useRef<ConvOwner | null>(null)
+  const myIdRef      = useRef<string | null>(null)
+  useEffect(() => { selectedRef.current = selected }, [selected])
+  useEffect(() => { myIdRef.current = myId }, [myId])
 
   const loadOwners = useCallback(async (cid: string, vetId: string) => {
     const { data: conns } = await supabase
@@ -126,32 +130,51 @@ export default function PorukePage() {
 
   async function selectOwner(owner: ConvOwner) {
     setSelected(owner)
+    selectedRef.current = owner
     setMobileView("chat")
     await loadMessages(owner)
+  }
 
-    if (channelRef.current) await supabase.removeChannel(channelRef.current)
+  useEffect(() => {
+    if (!myId || !clinicId) return
+    if (channelRef.current) supabase.removeChannel(channelRef.current)
 
-    const ch = supabase.channel(`chat-vet-${owner.id}-${Date.now()}`)
+    const ch = supabase.channel(`chat-vet-${clinicId}-${Date.now()}`)
       .on("postgres_changes", {
         event: "INSERT", schema: "public", table: "messages",
         filter: `clinic_id=eq.${clinicId}`,
       }, (payload) => {
         const m = payload.new as Message
-        const involved =
-          (m.sender_id === myId && m.receiver_id === owner.id) ||
-          (m.sender_id === owner.id && m.receiver_id === myId)
-        if (!involved) return
-        setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m])
-        if (m.sender_id === owner.id) {
-          supabase.from("messages").update({ is_read: true }).eq("id", m.id)
+        const me = myIdRef.current
+        if (!me) return
+        if (m.sender_id !== me && m.receiver_id !== me) return
+        const otherId = m.sender_id === me ? m.receiver_id : m.sender_id
+        const sel = selectedRef.current
+        const isOpen = sel?.id === otherId
+
+        if (isOpen) {
+          setMessages(prev => prev.find(x => x.id === m.id) ? prev : [...prev, m])
+          if (m.sender_id === otherId) {
+            supabase.from("messages").update({ is_read: true }).eq("id", m.id)
+          }
         }
-        setOwners(prev => prev.map(o =>
-          o.id === owner.id ? { ...o, lastMessage: previewFor(m), lastAt: m.created_at } : o
-        ))
+
+        setOwners(prev => prev.map(o => {
+          if (o.id !== otherId) return o
+          const incoming = m.sender_id === otherId
+          return {
+            ...o,
+            lastMessage: previewFor(m),
+            lastAt: m.created_at,
+            unread: incoming && !isOpen ? o.unread + 1 : o.unread,
+          }
+        }))
       })
       .subscribe()
     channelRef.current = ch
-  }
+
+    return () => { if (ch) supabase.removeChannel(ch) }
+  }, [myId, clinicId, supabase])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })

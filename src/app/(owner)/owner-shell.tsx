@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { Home, CalendarDays, CalendarCheck, PawPrint, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
+import { Home, CalendarDays, PawPrint, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
 const tabs = [
@@ -117,11 +117,11 @@ export function OwnerShell({
     return (
       <div className="flex flex-col" style={{ height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
         {Header}
-        <div className="flex-shrink-0" style={{ height: 56, paddingTop: "env(safe-area-inset-top, 0px)" }} />
+        <div className="shrink-0" style={{ height: 56, paddingTop: "env(safe-area-inset-top, 0px)" }} />
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {children}
         </main>
-        <div className="flex-shrink-0" style={{ height: 56, paddingBottom: "env(safe-area-inset-bottom, 0px)" }} />
+        <div className="shrink-0" style={{ height: 56, paddingBottom: "env(safe-area-inset-bottom, 0px)" }} />
         {BottomNav}
       </div>
     )
@@ -131,7 +131,7 @@ export function OwnerShell({
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       {Header}
       <main className="content-gradient">
-        <div className="relative z-1 max-w-lg mx-auto px-4 pt-[72px] pb-28">
+        <div className="relative z-1 max-w-lg mx-auto px-4 pt-18 pb-28">
           {children}
         </div>
       </main>

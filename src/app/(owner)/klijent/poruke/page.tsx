@@ -148,21 +148,22 @@ export default function OwnerPorukePage() {
     <div className="flex flex-col w-full flex-1 min-h-0 overflow-hidden" style={{ background: "var(--bg)" }}>
       {/* Conversation header */}
       <div
-        className="flex items-center gap-3 px-4 py-3 flex-shrink-0"
+        className="flex items-center gap-3 px-4 py-3 shrink-0"
         style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
       >
         {clinic ? (
           <>
             {clinic.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={clinic.logo_url}
                 alt={clinic.name}
-                className="rounded-xl object-cover flex-shrink-0"
+                className="rounded-xl object-cover shrink-0"
                 style={{ width: 38, height: 38 }}
               />
             ) : (
               <div
-                className="rounded-xl flex items-center justify-center font-bold flex-shrink-0"
+                className="rounded-xl flex items-center justify-center font-bold shrink-0"
                 style={{
                   width: 38, height: 38,
                   background: "linear-gradient(135deg, var(--brand) 0%, #239684 100%)",
