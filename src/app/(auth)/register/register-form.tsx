@@ -9,17 +9,19 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
+import { OtpStep } from "@/components/auth/otp-step"
+import { requestOtp, verifyEmailOtp } from "@/lib/auth/otp"
 
 function RegisterFormInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const clinicSlug = searchParams.get("clinic")
 
+  const [step, setStep] = useState<"form" | "code">("form")
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
   const [inviteClinicName, setInviteClinicName] = useState<string | null>(null)
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -31,44 +33,57 @@ function RegisterFormInner() {
     })
   }, [clinicSlug])
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     const supabase = createClient()
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { role: "owner", full_name: fullName, phone },
-      },
+    const { error: otpError } = await requestOtp(supabase, email, {
+      shouldCreateUser: true,
+      data: { role: "owner", full_name: fullName, phone },
     })
+    setLoading(false)
 
-    if (signUpError || !data.user) {
-      setError(signUpError?.message ?? "Greška pri registraciji.")
-      setLoading(false)
+    if (otpError) {
+      setError(otpError)
       return
     }
+    setStep("code")
+  }
 
-    const userId = data.user.id
+  async function handleVerify(code: string) {
+    const supabase = createClient()
+    const { error: verifyError } = await verifyEmailOtp(supabase, email, code)
+    if (verifyError) return { error: verifyError }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Sesija nije uspostavljena. Pokušajte ponovo." }
 
     await supabase
       .from("profiles")
       .upsert({
-        id: userId,
+        id: user.id,
         role: "owner",
         full_name: fullName,
         phone,
       })
 
     if (clinicSlug) {
-      await connectOwnerToClinicBySlug(supabase, userId, clinicSlug)
+      await connectOwnerToClinicBySlug(supabase, user.id, clinicSlug)
     }
 
     router.push("/klijent")
     router.refresh()
+    return { error: null }
+  }
+
+  async function handleResend() {
+    const supabase = createClient()
+    return requestOtp(supabase, email, {
+      shouldCreateUser: true,
+      data: { role: "owner", full_name: fullName, phone },
+    })
   }
 
   return (
@@ -78,11 +93,15 @@ function RegisterFormInner() {
           <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#2BB5A0]/10">
             <PawPrint className="h-6 w-6 text-[#2BB5A0]" aria-hidden="true" />
           </div>
-          <h1 className="font-heading text-2xl leading-snug font-medium">Kreirajte nalog</h1>
-          <CardDescription>Registracija za vlasnike ljubimaca</CardDescription>
+          <h1 className="font-heading text-2xl leading-snug font-medium">
+            {step === "form" ? "Kreirajte nalog" : "Potvrdite email"}
+          </h1>
+          <CardDescription>
+            {step === "form" ? "Registracija za vlasnike ljubimaca" : "Unesite šifru iz email-a"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {clinicSlug && (
+          {clinicSlug && step === "form" && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#2BB5A0]/20 bg-[#2BB5A0]/5 p-3 text-sm text-[#239684]">
               <Building2 className="h-4 w-4 mt-0.5 flex-none" aria-hidden="true" />
               <p>
@@ -97,71 +116,77 @@ function RegisterFormInner() {
               </p>
             </div>
           )}
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Ime i prezime</Label>
-              <Input
-                id="fullName"
-                placeholder="Marko Marković"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefon</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="06x xxx xxxx"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </div>
+          {step === "form" ? (
+            <>
+              <form onSubmit={handleSendCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Ime i prezime</Label>
+                  <Input
+                    id="fullName"
+                    placeholder="Marko Marković"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="vas@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefon</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="06x xxx xxxx"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Lozinka</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Min. 6 karaktera"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={6}
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="vas@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
 
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+                {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
-            <button
-              type="submit"
-              className="btn-primary w-full py-3 text-base"
-              disabled={loading}
-            >
-              {loading ? "Kreiranje..." : "Kreiraj nalog"}
-            </button>
-          </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Već imate nalog?{" "}
-            <Link href="/login" className="text-[#2BB5A0] font-medium hover:underline">
-              Prijavite se
-            </Link>
-          </p>
+                <button
+                  type="submit"
+                  className="btn-primary w-full py-3 text-base"
+                  disabled={loading}
+                >
+                  {loading ? "Slanje..." : "Pošalji kod"}
+                </button>
+              </form>
+              <p className="text-xs text-center text-muted-foreground mt-3">
+                Bez lozinke — kreiramo nalog kodom poslatim na email.
+              </p>
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Već imate nalog?{" "}
+                <Link href="/login" className="text-[#2BB5A0] font-medium hover:underline">
+                  Prijavite se
+                </Link>
+              </p>
+            </>
+          ) : (
+            <OtpStep
+              email={email}
+              onVerify={handleVerify}
+              onResend={handleResend}
+              onChangeEmail={() => {
+                setStep("form")
+                setError(null)
+              }}
+              verifyLabel="Kreiraj nalog"
+            />
+          )}
         </CardContent>
       </Card>
     </main>

@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { PawPrint, Loader2, AlertCircle } from "lucide-react"
+import { PawPrint, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+// Vets who click an owner invite are bounced to their dashboard.
 import { createClient } from "@/lib/supabase/client"
 import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
 
-type View = "loading" | "notFound" | "loggedOut" | "connecting" | "wrongRole" | "error"
+type View = "loading" | "notFound" | "loggedOut" | "connecting" | "error"
 
 type Props = {
   slug: string
@@ -55,7 +56,7 @@ export function JoinClient({ slug, initialClinicName }: Props) {
       }
 
       if (result.error === "wrong-role") {
-        setView("wrongRole")
+        router.replace("/dashboard")
         return
       }
 
@@ -94,31 +95,6 @@ export function JoinClient({ slug, initialClinicName }: Props) {
             <p className="text-sm text-muted-foreground">
               Proverite link koji ste dobili od veterinara.
             </p>
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
-  if (view === "wrongRole") {
-    return (
-      <main className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
-        <Card className="max-w-sm w-full shadow-xl">
-          <CardContent className="py-10 text-center space-y-4">
-            <div className="mx-auto w-fit bg-amber-100 p-3 rounded-full">
-              <AlertCircle className="h-8 w-8 text-amber-600" aria-hidden="true" />
-            </div>
-            <h1 className="font-semibold">Ovaj link je za vlasnike ljubimaca.</h1>
-            <p className="text-sm text-muted-foreground">
-              Prijavljeni ste kao veterinar. Odjavite se i prijavite kao vlasnik da biste se povezali.
-            </p>
-            <Button
-              onClick={() => router.push("/dashboard")}
-              variant="outline"
-              className="w-full"
-            >
-              Nazad na dashboard
-            </Button>
           </CardContent>
         </Card>
       </main>
