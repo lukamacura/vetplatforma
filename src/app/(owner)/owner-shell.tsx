@@ -3,11 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-<<<<<<< HEAD
-import { Home, CalendarDays, PawPrint, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
-=======
 import { Home, CalendarDays, CalendarCheck, Building2, LogOut, MessageSquare, UserCircle } from "lucide-react"
->>>>>>> a0be8c770fbebcdba9df7b51490cea575c1cea83
 import { createClient } from "@/lib/supabase/client"
 
 const tabs = [
