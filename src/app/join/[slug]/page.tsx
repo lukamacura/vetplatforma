@@ -1,19 +1,14 @@
 import type { Metadata } from "next"
+import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { fetchClinicBySlug } from "@/lib/connections"
-import { JoinClient } from "./join-client"
+import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
 
-type Params = { id: string }
+type Params = { slug: string }
 
-/**
- * Per-clinic invite page. `noindex` because these URLs are personalized
- * invites shared directly with owners — they shouldn't be discoverable
- * through search engines.
- */
 export async function generateMetadata(
   { params }: { params: Promise<Params> }
 ): Promise<Metadata> {
-  const { id: slug } = await params
+  const { slug } = await params
   let clinicName: string | null = null
   try {
     const supabase = await createClient()
@@ -57,16 +52,30 @@ export async function generateMetadata(
 export default async function JoinClinicPage(
   { params }: { params: Promise<Params> }
 ) {
-  const { id: slug } = await params
+  const { slug } = await params
+  const supabase = await createClient()
 
-  let initialClinicName: string | null = null
-  try {
-    const supabase = await createClient()
-    const clinic = await fetchClinicBySlug(supabase, slug)
-    initialClinicName = clinic?.name ?? null
-  } catch {
-    initialClinicName = null
+  const clinic = await fetchClinicBySlug(supabase, slug)
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect(clinic ? `/register?clinic=${slug}` : "/register")
   }
 
-  return <JoinClient slug={slug} initialClinicName={initialClinicName} />
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  const role = (profile?.role ?? user.user_metadata?.role) as string | undefined
+
+  if (role === "vet") {
+    redirect("/dashboard")
+  }
+
+  if (clinic) {
+    await connectOwnerToClinicBySlug(supabase, user.id, slug)
+  }
+  redirect("/klijent")
 }
