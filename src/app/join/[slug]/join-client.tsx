@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
 
-type View = "loading" | "notFound" | "loggedOut" | "connecting" | "error"
+type View = "loading" | "loggedOut" | "connecting" | "error"
 
 type Props = {
   slug: string
@@ -29,14 +29,11 @@ export function JoinClient({ slug, initialClinicName }: Props) {
     async function run() {
       const supabase = createClient()
 
-      const clinic = await fetchClinicBySlug(supabase, slug)
+      // Best-effort clinic lookup for the banner copy — failures (e.g. RLS for
+      // anon users) just leave clinicName empty and the flow continues.
+      const clinic = await fetchClinicBySlug(supabase, slug).catch(() => null)
       if (cancelled) return
-
-      if (!clinic) {
-        setView("notFound")
-        return
-      }
-      setClinicName(clinic.name)
+      if (clinic) setClinicName(clinic.name)
 
       const { data: { user } } = await supabase.auth.getUser()
       if (cancelled) return
@@ -60,7 +57,9 @@ export function JoinClient({ slug, initialClinicName }: Props) {
         return
       }
 
-      setView("error")
+      // Unknown clinic or DB hiccup — push the visitor into registration with
+      // the slug, instead of dead-ending on an error page.
+      router.replace(`/register?clinic=${slug}`)
     }
 
     run()
@@ -79,21 +78,6 @@ export function JoinClient({ slug, initialClinicName }: Props) {
               {view === "connecting" && clinicName
                 ? `Povezujemo vas sa klinikom ${clinicName}...`
                 : "Učitavanje..."}
-            </p>
-          </CardContent>
-        </Card>
-      </main>
-    )
-  }
-
-  if (view === "notFound") {
-    return (
-      <main className="min-h-screen bg-[#f0fbf9] flex items-center justify-center p-4">
-        <Card className="max-w-sm w-full text-center">
-          <CardContent className="py-10 space-y-3">
-            <h1 className="font-semibold">Klinika nije pronađena.</h1>
-            <p className="text-sm text-muted-foreground">
-              Proverite link koji ste dobili od veterinara.
             </p>
           </CardContent>
         </Card>
@@ -131,7 +115,13 @@ export function JoinClient({ slug, initialClinicName }: Props) {
           </div>
           <h1 className="font-heading text-xl leading-snug font-medium">Povežite se sa klinikom</h1>
           <CardDescription>
-            Vaš veterinar <span className="font-semibold text-foreground">{clinicName}</span> Vas poziva da postanete digitalni klijent.
+            {clinicName ? (
+              <>
+                Vaš veterinar <span className="font-semibold text-foreground">{clinicName}</span> Vas poziva da postanete digitalni klijent.
+              </>
+            ) : (
+              <>Pozvani ste da postanete digitalni klijent veterinarske klinike.</>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
