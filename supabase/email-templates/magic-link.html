@@ -1,0 +1,92 @@
+<!--
+  Supabase Auth → Email Templates → "Magic Link"
+  Subject: VetPlatforma — Vaš kod za prijavu: {{ .Token }}
+
+  Paste this entire file into the "Message Body (HTML)" field.
+  The {{ .Token }} variable is the 6-digit OTP code Supabase generates.
+-->
+<!DOCTYPE html>
+<html lang="sr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VetPlatforma — kod za prijavu</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#F7F9FB;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#0F172A;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#F7F9FB;padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:480px;background-color:#FFFFFF;border-radius:16px;box-shadow:0 4px 24px rgba(15,23,42,0.06);overflow:hidden;">
+            <!-- Header -->
+            <tr>
+              <td style="padding:32px 32px 8px 32px;text-align:center;">
+                <div style="display:inline-block;width:56px;height:56px;border-radius:50%;background-color:#E6F7F5;line-height:56px;margin-bottom:16px;">
+                  <span style="font-size:28px;line-height:56px;">🐾</span>
+                </div>
+                <h1 style="margin:0;font-size:22px;font-weight:600;color:#0F172A;letter-spacing:-0.01em;">
+                  VetPlatforma
+                </h1>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:24px 32px 8px 32px;text-align:center;">
+                <p style="margin:0 0 8px 0;font-size:16px;line-height:1.5;color:#0F172A;">
+                  Vaš jednokratni kod za prijavu:
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#64748B;">
+                  Unesite ga u VetPlatformu da biste se prijavili.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Big code -->
+            <tr>
+              <td align="center" style="padding:24px 32px;">
+                <div style="display:inline-block;background-color:#E6F7F5;border:1px solid rgba(43,181,160,0.25);border-radius:14px;padding:24px 32px;">
+                  <div style="font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;font-size:44px;font-weight:700;letter-spacing:0.4em;color:#239684;line-height:1;">
+                    {{ .Token }}
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Meta -->
+            <tr>
+              <td style="padding:0 32px 24px 32px;text-align:center;">
+                <p style="margin:0;font-size:13px;line-height:1.5;color:#64748B;">
+                  Kod važi <strong style="color:#0F172A;">10 minuta</strong>. Ne delite ga ni sa kim.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Divider -->
+            <tr>
+              <td style="padding:0 32px;">
+                <div style="border-top:1px solid #E2E8F0;height:1px;line-height:1px;font-size:0;">&nbsp;</div>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:20px 32px 32px 32px;text-align:center;">
+                <p style="margin:0 0 8px 0;font-size:12px;line-height:1.5;color:#94A3B8;">
+                  Ako niste vi pokrenuli prijavu, slobodno ignorišite ovu poruku — niko neće moći da pristupi nalogu bez koda.
+                </p>
+                <p style="margin:0;font-size:12px;line-height:1.5;color:#94A3B8;">
+                  © VetPlatforma · Beograd, Srbija
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Sub-footer -->
+          <p style="max-width:480px;margin:16px auto 0 auto;font-size:11px;line-height:1.5;color:#94A3B8;text-align:center;">
+            Ovaj email je automatski generisan kao odgovor na zahtev za prijavu na VetPlatforma sistem.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

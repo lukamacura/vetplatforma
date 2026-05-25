@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
+import { OtpStep } from "@/components/auth/otp-step"
+import { requestOtp, verifyEmailOtp } from "@/lib/auth/otp"
 
 const VET_ACCESS_KEY = "VET2026"
 
 export function VetRegisterForm() {
-  const [step, setStep] = useState<"key" | "register">("key")
+  const [step, setStep] = useState<"key" | "register" | "code">("key")
   const [accessKey, setAccessKey] = useState("")
   const [keyError, setKeyError] = useState<string | null>(null)
 
@@ -20,7 +22,6 @@ export function VetRegisterForm() {
   const [phone, setPhone] = useState("")
   const [clinicName, setClinicName] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -35,28 +36,32 @@ export function VetRegisterForm() {
     }
   }
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     const supabase = createClient()
-
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { role: "vet", full_name: fullName, phone: phone || null },
-      },
+    const { error: otpError } = await requestOtp(supabase, email, {
+      shouldCreateUser: true,
+      data: { role: "vet", full_name: fullName, phone: phone || null },
     })
+    setLoading(false)
 
-    if (signUpError || !data.user) {
-      setError(signUpError?.message ?? "Greška pri registraciji.")
-      setLoading(false)
+    if (otpError) {
+      setError(otpError)
       return
     }
+    setStep("code")
+  }
 
-    const userId = data.user.id
+  async function handleVerify(code: string) {
+    const supabase = createClient()
+    const { error: verifyError } = await verifyEmailOtp(supabase, email, code)
+    if (verifyError) return { error: verifyError }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: "Sesija nije uspostavljena. Pokušajte ponovo." }
 
     const slug =
       clinicName
@@ -68,18 +73,16 @@ export function VetRegisterForm() {
 
     const { data: clinic, error: clinicError } = await supabase
       .from("clinics")
-      .insert({ name: clinicName, slug, owner_id: userId })
+      .insert({ name: clinicName, slug, owner_id: user.id })
       .select()
       .single()
 
     if (clinicError || !clinic) {
-      setError("Klinika nije mogla biti kreirana.")
-      setLoading(false)
-      return
+      return { error: "Klinika nije mogla biti kreirana." }
     }
 
     await supabase.from("profiles").upsert({
-      id: userId,
+      id: user.id,
       role: "vet",
       full_name: fullName,
       phone: phone || null,
@@ -88,6 +91,15 @@ export function VetRegisterForm() {
 
     router.push("/dashboard")
     router.refresh()
+    return { error: null }
+  }
+
+  async function handleResend() {
+    const supabase = createClient()
+    return requestOtp(supabase, email, {
+      shouldCreateUser: true,
+      data: { role: "vet", full_name: fullName, phone: phone || null },
+    })
   }
 
   if (step === "key") {
@@ -141,85 +153,96 @@ export function VetRegisterForm() {
           <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-[#2BB5A0]/10">
             <PawPrint className="h-6 w-6 text-[#2BB5A0]" aria-hidden="true" />
           </div>
-          <h1 className="font-heading text-2xl leading-snug font-medium">Registracija veterinara</h1>
-          <CardDescription>Kreirajte kliniku i nalog — 30 dana besplatno</CardDescription>
+          <h1 className="font-heading text-2xl leading-snug font-medium">
+            {step === "register" ? "Registracija veterinara" : "Potvrdite email"}
+          </h1>
+          <CardDescription>
+            {step === "register"
+              ? "Kreirajte kliniku i nalog — 30 dana besplatno"
+              : "Unesite šifru iz email-a"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleRegister} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Ime i prezime</Label>
-              <Input
-                id="fullName"
-                placeholder="Marko Marković"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
+          {step === "register" ? (
+            <>
+              <form onSubmit={handleSendCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Ime i prezime</Label>
+                  <Input
+                    id="fullName"
+                    placeholder="Marko Marković"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="clinicName">Naziv klinike / ambulante</Label>
-              <Input
-                id="clinicName"
-                placeholder="Vet Ambulanta Novi Sad"
-                value={clinicName}
-                onChange={(e) => setClinicName(e.target.value)}
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clinicName">Naziv klinike / ambulante</Label>
+                  <Input
+                    id="clinicName"
+                    placeholder="Vet Ambulanta Novi Sad"
+                    value={clinicName}
+                    onChange={(e) => setClinicName(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefon (opcionalno)</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="06x xxx xxxx"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Telefon (opcionalno)</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="06x xxx xxxx"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="vas@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="vas@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Lozinka</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Min. 6 karaktera"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={6}
-                required
-              />
-            </div>
+                {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
 
-            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-
-            <button
-              type="submit"
-              className="btn-primary w-full py-3 text-base"
-              disabled={loading}
-            >
-              {loading ? "Kreiranje..." : "Kreiraj nalog"}
-            </button>
-          </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Već imate nalog?{" "}
-            <Link href="/login" className="text-[#2BB5A0] font-medium hover:underline">
-              Prijavite se
-            </Link>
-          </p>
+                <button
+                  type="submit"
+                  className="btn-primary w-full py-3 text-base"
+                  disabled={loading}
+                >
+                  {loading ? "Slanje..." : "Pošalji kod"}
+                </button>
+              </form>
+              <p className="text-xs text-center text-muted-foreground mt-3">
+                Bez lozinke — potvrdićemo email kodom.
+              </p>
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Već imate nalog?{" "}
+                <Link href="/login" className="text-[#2BB5A0] font-medium hover:underline">
+                  Prijavite se
+                </Link>
+              </p>
+            </>
+          ) : (
+            <OtpStep
+              email={email}
+              onVerify={handleVerify}
+              onResend={handleResend}
+              onChangeEmail={() => {
+                setStep("register")
+                setError(null)
+              }}
+              verifyLabel="Kreiraj nalog"
+            />
+          )}
         </CardContent>
       </Card>
     </main>

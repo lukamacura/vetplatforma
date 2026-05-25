@@ -473,7 +473,19 @@ export default function PatientsPage() {
             </p>
           )}
         </div>
-        {joinUrl && <CopyLinkButton url={joinUrl} />}
+        <div className="flex items-center gap-2">
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+            <Button
+              size="sm"
+              onClick={() => router.push("/dashboard/pacijenti/novi")}
+              className="gap-2 text-white font-600"
+              style={{ background: "var(--brand)", border: "none", fontWeight: 600 }}
+            >
+              <UserPlus size={14} strokeWidth={1.75} /> Dodaj klijenta
+            </Button>
+          </motion.div>
+          {joinUrl && <CopyLinkButton url={joinUrl} />}
+        </div>
       </motion.div>
 
       {/* Search + Filters */}
@@ -604,10 +616,23 @@ export default function PatientsPage() {
           <p className="font-600 text-sm mb-1" style={{ fontWeight: 600 }}>
             {rows.length === 0 ? "Još nema pacijenata" : "Nema rezultata pretrage"}
           </p>
-          {rows.length === 0 && joinUrl && (
-            <p className="text-xs max-w-xs mx-auto mt-1" style={{ color: "var(--text-muted)" }}>
-              Podelite link sa vlasnicima — oni sami povežu profil i dodaju ljubimce.
-            </p>
+          {rows.length === 0 && (
+            <>
+              <p className="text-xs max-w-xs mx-auto mt-1" style={{ color: "var(--text-muted)" }}>
+                Podelite link sa vlasnicima — oni sami povežu profil i dodaju ljubimce.
+                Ili dodajte klijenta ručno.
+              </p>
+              <div className="mt-4">
+                <Button
+                  size="sm"
+                  onClick={() => router.push("/dashboard/pacijenti/novi")}
+                  className="gap-2 text-white font-600"
+                  style={{ background: "var(--brand)", border: "none", fontWeight: 600 }}
+                >
+                  <UserPlus size={14} strokeWidth={1.75} /> Dodaj klijenta
+                </Button>
+              </div>
+            </>
           )}
           {rows.length > 0 && searchTerm && (
             <p className="text-xs max-w-xs mx-auto mt-1" style={{ color: "var(--text-muted)" }}>

@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardDescription } from "@/components/ui/card"
 import { createClient } from "@/lib/supabase/client"
 import { connectOwnerToClinicBySlug, fetchClinicBySlug } from "@/lib/connections"
+import { OtpStep } from "@/components/auth/otp-step"
+import { requestOtp, verifyEmailOtp } from "@/lib/auth/otp"
 
 function LoginFormInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const clinicSlug = searchParams.get("clinic")
+  const [step, setStep] = useState<"email" | "code">("email")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [inviteClinicName, setInviteClinicName] = useState<string | null>(null)
@@ -28,30 +30,70 @@ function LoginFormInner() {
     })
   }, [clinicSlug])
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
 
-    if (authError) {
-      setError("Pogrešan email ili lozinka.")
+    const { data: hasAccount, error: rpcError } = await supabase.rpc("email_has_account", {
+      p_email: email,
+    })
+
+    if (rpcError) {
       setLoading(false)
+      setError("Došlo je do greške. Pokušajte ponovo.")
       return
     }
 
+    if (!hasAccount) {
+      setLoading(false)
+      setError("Niste kreirali nalog.")
+      return
+    }
+
+    const { error: otpError } = await requestOtp(supabase, email, { shouldCreateUser: true })
+    setLoading(false)
+
+    if (otpError) {
+      setError(otpError)
+      return
+    }
+    setStep("code")
+  }
+
+  async function handleVerify(code: string) {
+    const supabase = createClient()
+    const { error: verifyError } = await verifyEmailOtp(supabase, email, code)
+    if (verifyError) return { error: verifyError }
+
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) return { error: "Sesija nije uspostavljena. Pokušajte ponovo." }
 
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
-    const role = profile?.role ?? (user.user_metadata?.role as string | undefined)
+    let role = profile?.role as string | undefined
+
+    if (!profile) {
+      const metaRole = (user.user_metadata?.role as string | undefined) ?? "owner"
+      const fullName = (user.user_metadata?.full_name as string | undefined) ?? ""
+      const phone = (user.user_metadata?.phone as string | null | undefined) ?? null
+      const { error: upsertError } = await supabase.from("profiles").upsert({
+        id: user.id,
+        role: metaRole,
+        full_name: fullName,
+        phone,
+      })
+      if (upsertError) {
+        return { error: "Profil nije mogao biti kreiran. Kontaktirajte podršku." }
+      }
+      role = metaRole
+    }
 
     if (clinicSlug && role === "owner") {
       await connectOwnerToClinicBySlug(supabase, user.id, clinicSlug)
@@ -62,6 +104,12 @@ function LoginFormInner() {
       router.push(role === "vet" ? "/dashboard" : "/klijent")
     }
     router.refresh()
+    return { error: null }
+  }
+
+  async function handleResend() {
+    const supabase = createClient()
+    return requestOtp(supabase, email, { shouldCreateUser: true })
   }
 
   return (
@@ -72,10 +120,14 @@ function LoginFormInner() {
             <PawPrint className="h-6 w-6 text-[#2BB5A0]" aria-hidden="true" />
           </div>
           <h1 className="font-heading text-2xl leading-snug font-medium">VetPlatforma</h1>
-          <CardDescription>Prijavite se na Vaš nalog</CardDescription>
+          <CardDescription>
+            {step === "email"
+              ? "Prijavite se kodom poslatim na email"
+              : "Unesite šifru iz email-a"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          {clinicSlug && (
+          {clinicSlug && step === "email" && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#2BB5A0]/20 bg-[#2BB5A0]/5 p-3 text-sm text-[#239684]">
               <Building2 className="h-4 w-4 mt-0.5 flex-none" aria-hidden="true" />
               <p>
@@ -90,46 +142,52 @@ function LoginFormInner() {
               </p>
             </div>
           )}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="vas@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Lozinka</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <p className="text-sm text-red-600" role="alert">{error}</p>
-            )}
-            <button
-              type="submit"
-              className="btn-primary w-full py-3 text-base"
-              disabled={loading}
-            >
-              {loading ? "Prijavljivanje..." : "Prijavi se"}
-            </button>
-          </form>
-          <p className="text-center text-sm text-muted-foreground mt-4">
-            Nemate nalog?{" "}
-            <Link href="/register" className="text-[#2BB5A0] font-medium hover:underline">
-              Registrujte se
-            </Link>
-          </p>
+
+          {step === "email" ? (
+            <>
+              <form onSubmit={handleSendCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="vas@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+                <button
+                  type="submit"
+                  className="btn-primary w-full py-3 text-base"
+                  disabled={loading}
+                >
+                  {loading ? "Slanje..." : "Pošalji kod"}
+                </button>
+              </form>
+              <p className="text-xs text-center text-muted-foreground mt-3">
+                Uđite na mejl i kopirajte kod koji dobijete.
+              </p>
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                Nemate nalog?{" "}
+                <Link href="/register" className="text-[#2BB5A0] font-medium hover:underline">
+                  Registrujte se
+                </Link>
+              </p>
+            </>
+          ) : (
+            <OtpStep
+              email={email}
+              onVerify={handleVerify}
+              onResend={handleResend}
+              onChangeEmail={() => {
+                setStep("email")
+                setError(null)
+              }}
+              verifyLabel="Prijavi se"
+            />
+          )}
         </CardContent>
       </Card>
     </main>

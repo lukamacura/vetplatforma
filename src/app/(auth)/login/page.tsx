@@ -4,12 +4,12 @@ import { LoginForm } from "./login-form"
 export const metadata: Metadata = {
   title: "Prijava",
   description:
-    "Prijavite se na VetPlatformu — digitalno zakazivanje termina, kartoni ljubimaca i komunikacija sa Vašom veterinarskom klinikom.",
+    "Prijavite se na VetPlatformu - digitalno zakazivanje termina, kartoni ljubimaca i komunikacija sa Vašom veterinarskom klinikom.",
   alternates: { canonical: "/login" },
   openGraph: {
     title: "Prijava · VetPlatforma",
     description:
-      "Prijavite se na VetPlatformu — digitalno zakazivanje termina i upravljanje brigom o ljubimcu.",
+      "Prijavite se na VetPlatformu - digitalno zakazivanje termina i upravljanje brigom o ljubimcu.",
     url: "/login",
     type: "website",
   },
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Prijava · VetPlatforma",
     description:
-      "Prijavite se na VetPlatformu — digitalno zakazivanje termina i upravljanje brigom o ljubimcu.",
+      "Prijavite se na VetPlatformu - digitalno zakazivanje termina i upravljanje brigom o ljubimcu.",
   },
 }
 

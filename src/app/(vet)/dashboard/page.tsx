@@ -147,6 +147,7 @@ export default function DashboardPage() {
   const isToday = isSameDay(selectedDate, new Date())
 
   const [ownerDayNotes, setOwnerDayNotes] = useState<Record<string, string>>({})
+  const [ownerNames, setOwnerNames] = useState<Record<string, string>>({})
 
   // Initial load: get clinic info + connected count
   useEffect(() => {
@@ -264,6 +265,15 @@ export default function DashboardPage() {
         if (row.note?.trim()) noteMap[row.owner_id] = row.note
       }
       setOwnerDayNotes(noteMap)
+
+      const noteOwnerIds = Object.keys(noteMap)
+      if (noteOwnerIds.length) {
+        const { data: noteOwners } = await supabase
+          .from("profiles").select("id, full_name").in("id", noteOwnerIds)
+        setOwnerNames(Object.fromEntries((noteOwners ?? []).map((p) => [p.id, p.full_name])))
+      } else {
+        setOwnerNames({})
+      }
 
       setLoading(false)
     }
@@ -805,7 +815,7 @@ export default function DashboardPage() {
             ) : (
               <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-3">
                 {Object.entries(ownerDayNotes).map(([ownerId, note]) => {
-                  const ownerName = appointments.find((a) => a.owner_id === ownerId)?.owner_name
+                  const ownerName = ownerNames[ownerId] ?? appointments.find((a) => a.owner_id === ownerId)?.owner_name
                   return (
                     <motion.div
                       key={ownerId}
