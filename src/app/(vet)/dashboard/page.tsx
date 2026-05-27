@@ -1,10 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CalendarDays, Users, ChevronRight, ChevronLeft, CalendarPlus, MessageSquare, Sparkles, Syringe, Stethoscope, Eye, UserPlus, Check, ChevronDown, Phone } from "lucide-react"
+import { CalendarDays, Users, ChevronRight, ChevronLeft, CalendarPlus, MessageSquare, Eye, UserPlus, Check, ChevronDown, Phone } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
-import { PetAvatar } from "@/components/ui/pet-avatar"
 import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import { SPECIES_LABEL } from "@/lib/species"
@@ -31,11 +30,6 @@ function dayKeyFromLocal(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
-}
-
-function formatDateNumeric(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-")
-  return `${d}.${m}.${y}.`
 }
 
 function getMonthGrid(year: number, month: number): (Date | null)[] {
@@ -403,8 +397,6 @@ export default function DashboardPage() {
     return m
   }, [monthReminders])
 
-  const selectedDayKey    = dayKeyFromLocal(selectedDate)
-  const selectedReminders = remindersByKey[selectedDayKey] ?? []
 
   // Load total unread messages count for this vet
   useEffect(() => {
@@ -765,8 +757,8 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* Day detail — Beleške vlasnika + Podsetnici side-by-side */}
-      <div className="grid grid-cols-1 gap-4 lg:gap-5 lg:grid-cols-2 items-start">
+      {/* Day detail — Beleške vlasnika */}
+      <div className="grid grid-cols-1 gap-4 lg:gap-5 items-start">
 
         {/* Beleške vlasnika card */}
         <motion.div variants={stagger.item} className="rounded-2xl overflow-hidden h-full" style={{ border: "1.5px solid rgba(43,181,160,0.30)", background: "var(--surface)" }}>
@@ -841,86 +833,6 @@ export default function DashboardPage() {
                     </motion.div>
                   )
                 })}
-              </motion.div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Podsetnici card - vaccines & controls for the selected day */}
-        <motion.div variants={stagger.item} className="rounded-2xl overflow-hidden h-full" style={{ border: "1.5px solid rgba(217,119,6,0.22)", background: "var(--surface)" }}>
-
-          {/* Card header */}
-          <div
-            className="flex items-center justify-between gap-3 px-5 py-4"
-            style={{ borderBottom: "1px solid rgba(217,119,6,0.18)", background: "linear-gradient(135deg, rgba(217,119,6,0.06) 0%, transparent 100%)" }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="icon-sm icon-amber shrink-0">
-                <Sparkles size={13} strokeWidth={2.25} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm truncate" style={{ fontWeight: 700 }}>
-                  {isToday
-                    ? "Podsetnici za danas"
-                    : `Podsetnici - ${selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
-                </h3>
-                {selectedReminders.length > 0 && (
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                    {selectedReminders.length} {selectedReminders.length === 1 ? "podsetnik" : "podsetnika"}
-                  </p>
-                )}
-              </div>
-            </div>
-            <span className="badge badge-amber shrink-0">
-              <Sparkles size={11} strokeWidth={2} />
-              {isToday ? "Danas" : selectedDate.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "2-digit" })}
-            </span>
-          </div>
-
-          {/* Card body */}
-          <div className="p-4">
-            {selectedReminders.length === 0 ? (
-              <div className="py-14 text-center">
-                <div className="icon-lg icon-amber mx-auto mb-4">
-                  <Sparkles size={22} strokeWidth={1.75} />
-                </div>
-                <p className="text-sm mb-1" style={{ fontWeight: 600 }}>
-                  {isToday ? "Nema podsetnika za danas" : "Nema podsetnika za ovaj dan"}
-                </p>
-                <p className="text-xs max-w-xs mx-auto" style={{ color: "var(--text-muted)" }}>
-                  Vakcinacije i kontrolni pregledi zakazani za ovaj dan pojaviće se ovde.
-                </p>
-              </div>
-            ) : (
-              <motion.div variants={stagger.container} initial="hidden" animate="visible" className="space-y-2">
-                {selectedReminders.map((r) => (
-                  <motion.div
-                    key={`${r.petId}-${r.type}`}
-                    variants={stagger.row}
-                    className="appt-row flex items-center gap-4 rounded-xl px-4 py-3"
-                  >
-                    <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={32} />
-                    <div
-                      className="w-px self-stretch rounded-full shrink-0"
-                      style={{ background: "var(--border)" }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm leading-snug truncate" style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                        {r.petName}
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
-                      </p>
-                    </div>
-                    <span className="badge badge-amber shrink-0" style={{ gap: 4 }}>
-                      {r.type === "vaccine"
-                        ? <Syringe size={10} strokeWidth={2.5} />
-                        : <Stethoscope size={10} strokeWidth={2.5} />
-                      }
-                      {formatDateNumeric(r.date)}
-                    </span>
-                  </motion.div>
-                ))}
               </motion.div>
             )}
           </div>

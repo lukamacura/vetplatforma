@@ -4,11 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft,
-  Save,
   Syringe,
   Stethoscope,
   Phone,
-  CheckCircle,
   FileText,
   ChevronDown,
   Loader2,
@@ -204,8 +202,12 @@ export default function PetProfilePage() {
 
   const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
   const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
-  const [savingApptNote, setSavingApptNote] = useState<string | null>(null)
-  const [savedApptNote, setSavedApptNote] = useState<string | null>(null)
+  const [apptNoteStatus, setApptNoteStatus] = useState<Record<string, SaveStatus>>({})
+
+  // Auto-save state for per-appointment notes (keyed by appointment id)
+  const apptNotesDraftRef = useRef<Record<string, string>>({})
+  const apptDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const apptSavedRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   // Auto-save state
   const [basicsStatus, setBasicsStatus] = useState<SaveStatus>("idle")
@@ -312,11 +314,15 @@ export default function PetProfilePage() {
 
   // Flush timers on unmount
   useEffect(() => {
+    const apptDebounce = apptDebounceRef.current
+    const apptSaved = apptSavedRef.current
     return () => {
       if (basicsDebounceRef.current) clearTimeout(basicsDebounceRef.current)
       if (basicsSavedRef.current)    clearTimeout(basicsSavedRef.current)
       if (datesDebounceRef.current)  clearTimeout(datesDebounceRef.current)
       if (datesSavedRef.current)     clearTimeout(datesSavedRef.current)
+      Object.values(apptDebounce).forEach(clearTimeout)
+      Object.values(apptSaved).forEach(clearTimeout)
     }
   }, [])
 
@@ -378,24 +384,33 @@ export default function PetProfilePage() {
     datesDebounceRef.current = setTimeout(() => saveDates(), 600)
   }, [saveDates])
 
-  async function handleSaveApptNote(apptId: string) {
-    const text = apptNotesDraft[apptId] ?? ""
-    setSavingApptNote(apptId)
-    setSavedApptNote(null)
+  const saveApptNote = useCallback(async (apptId: string) => {
+    const text = apptNotesDraftRef.current[apptId] ?? ""
     const supabase = createClient()
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from("appointments")
       .update({ vet_notes: text.trim() || null })
       .eq("id", apptId)
-    setSavingApptNote(null)
-    if (!updateError) {
-      setSavedApptNote(apptId)
+    if (!error) {
       setApptHistory((prev) =>
         prev.map((a) => (a.id === apptId ? { ...a, vet_notes: text.trim() || null } : a))
       )
-      setTimeout(() => setSavedApptNote(null), 3000)
+      setApptNoteStatus((prev) => ({ ...prev, [apptId]: "saved" }))
+      if (apptSavedRef.current[apptId]) clearTimeout(apptSavedRef.current[apptId])
+      apptSavedRef.current[apptId] = setTimeout(
+        () => setApptNoteStatus((prev) => ({ ...prev, [apptId]: "idle" })),
+        1800
+      )
+    } else {
+      setApptNoteStatus((prev) => ({ ...prev, [apptId]: "idle" }))
     }
-  }
+  }, [])
+
+  const triggerApptNoteSave = useCallback((apptId: string) => {
+    setApptNoteStatus((prev) => ({ ...prev, [apptId]: "saving" }))
+    if (apptDebounceRef.current[apptId]) clearTimeout(apptDebounceRef.current[apptId])
+    apptDebounceRef.current[apptId] = setTimeout(() => saveApptNote(apptId), 600)
+  }, [saveApptNote])
 
   function toggleApptExpand(apptId: string) {
     if (expandedApptId === apptId) {
@@ -405,6 +420,7 @@ export default function PetProfilePage() {
       const existing = apptHistory.find((a) => a.id === apptId)
       if (existing && !(apptId in apptNotesDraft)) {
         setApptNotesDraft((prev) => ({ ...prev, [apptId]: existing.vet_notes ?? "" }))
+        apptNotesDraftRef.current[apptId] = existing.vet_notes ?? ""
       }
     }
   }
@@ -664,7 +680,7 @@ export default function PetProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
         {/* Left column: Podaci o ljubimcu */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-5">
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-7">
           <div className="flex items-center mb-4">
             <h3 className="text-sm" style={{ fontWeight: 600 }}>Podaci o ljubimcu</h3>
           </div>
@@ -684,7 +700,7 @@ export default function PetProfilePage() {
         </motion.div>
 
         {/* Middle column: Podsetnici */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-4">
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm" style={{ fontWeight: 600 }}>Termini i vakcinacija</h3>
               <SaveIndicator status={datesStatus} />
@@ -745,9 +761,11 @@ export default function PetProfilePage() {
             </div>
           </motion.div>
 
-        {/* Right column: Posete */}
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 lg:col-span-3">
-            <h3 className="text-sm mb-4" style={{ fontWeight: 600 }}>Istorija poseta</h3>
+      </div>{/* /grid */}
+
+      {/* Posete — full width, below everything */}
+      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 w-full">
+            <h3 className="text-sm mb-4" style={{ fontWeight: 600 }}>Sve posete</h3>
         <div className="relative pl-1">
           <ul className="space-y-0">
             {apptHistory.map((appt, idx) => {
@@ -815,7 +833,10 @@ export default function PetProfilePage() {
                         transition={{ duration: 0.2 }}
                         className="mt-3 overflow-hidden"
                       >
-                        <FieldLabel>Beleške sa posete</FieldLabel>
+                        <div className="flex items-center justify-between">
+                          <FieldLabel>Beleške sa posete</FieldLabel>
+                          <SaveIndicator status={apptNoteStatus[appt.id] ?? "idle"} />
+                        </div>
                         <textarea
                           className="vet-notes-textarea w-full min-h-[80px] rounded-xl text-sm resize-y px-3 py-2 mt-1.5"
                           style={{
@@ -826,35 +847,13 @@ export default function PetProfilePage() {
                           }}
                           placeholder="Dodaj beleške za ovu posetu…"
                           value={apptNotesDraft[appt.id] ?? appt.vet_notes ?? ""}
-                          onChange={(e) => setApptNotesDraft((prev) => ({ ...prev, [appt.id]: e.target.value }))}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setApptNotesDraft((prev) => ({ ...prev, [appt.id]: val }))
+                            apptNotesDraftRef.current[appt.id] = val
+                            triggerApptNoteSave(appt.id)
+                          }}
                         />
-                        <div className="flex items-center gap-3 mt-2">
-                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                            <button
-                              type="button"
-                              onClick={() => handleSaveApptNote(appt.id)}
-                              disabled={savingApptNote === appt.id}
-                              className="btn-primary px-4 py-2 text-xs flex items-center gap-1.5"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {savingApptNote === appt.id
-                                ? <span className="animate-spin inline-block">↻</span>
-                                : <Save size={12} strokeWidth={2} />}
-                              {savingApptNote === appt.id ? "Čuvanje..." : "Sačuvaj"}
-                            </button>
-                          </motion.div>
-                          {savedApptNote === appt.id && (
-                            <motion.span
-                              initial={{ opacity: 0, x: -4 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              className="flex items-center gap-1 text-xs"
-                              style={{ color: "var(--green)", fontWeight: 600 }}
-                            >
-                              <CheckCircle size={13} strokeWidth={2.25} />
-                              Sačuvano
-                            </motion.span>
-                          )}
-                        </div>
                       </motion.div>
                     )}
                   </div>
@@ -867,8 +866,6 @@ export default function PetProfilePage() {
           )}
         </div>
       </motion.div>
-
-      </div>{/* /grid */}
     </motion.div>
   )
 }
