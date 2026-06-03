@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useCallback } from "react"
-import { User, Check, Loader2, Mail, Lock, Eye, EyeOff, ShieldCheck } from "lucide-react"
+import { User, Check, Loader2, Mail, ShieldCheck } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -43,14 +43,6 @@ export default function OwnerPodesavanjaPage() {
   const [newEmail,      setNewEmail]      = useState("")
   const [emailLoading,  setEmailLoading]  = useState(false)
   const [emailMsg,      setEmailMsg]      = useState<{ type: "ok" | "err"; text: string } | null>(null)
-
-  // Password change
-  const [currentPw,   setCurrentPw]   = useState("")
-  const [newPw,       setNewPw]       = useState("")
-  const [confirmPw,   setConfirmPw]   = useState("")
-  const [showPw,      setShowPw]      = useState(false)
-  const [pwLoading,   setPwLoading]   = useState(false)
-  const [pwMsg,       setPwMsg]       = useState<{ type: "ok" | "err"; text: string } | null>(null)
 
   const loadedRef       = useRef(false)
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -155,31 +147,6 @@ export default function OwnerPodesavanjaPage() {
     } else {
       setEmailMsg({ type: "ok", text: "Potvrda je poslata na novu adresu. Kliknite na link u e-mailu." })
       setNewEmail("")
-    }
-  }
-
-  async function handlePasswordChange(e: React.FormEvent) {
-    e.preventDefault()
-    if (!newPw || newPw.length < 6) {
-      setPwMsg({ type: "err", text: "Lozinka mora imati najmanje 6 karaktera." })
-      return
-    }
-    if (newPw !== confirmPw) {
-      setPwMsg({ type: "err", text: "Lozinke se ne podudaraju." })
-      return
-    }
-    setPwLoading(true)
-    setPwMsg(null)
-    const supabase = createClient()
-    const { error } = await supabase.auth.updateUser({ password: newPw })
-    setPwLoading(false)
-    if (error) {
-      setPwMsg({ type: "err", text: error.message })
-    } else {
-      setPwMsg({ type: "ok", text: "Lozinka je uspešno promenjena." })
-      setCurrentPw("")
-      setNewPw("")
-      setConfirmPw("")
     }
   }
 
@@ -342,98 +309,6 @@ export default function OwnerPodesavanjaPage() {
               </span>
             ) : (
               "Promeni e-mail"
-            )}
-          </button>
-        </form>
-      </motion.div>
-
-      {/* ── Password change ── */}
-      <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="icon-md icon-amber shrink-0">
-            <Lock size={16} strokeWidth={2} />
-          </div>
-          <div>
-            <h2 className="text-sm" style={{ fontWeight: 700 }}>Promena lozinke</h2>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Koristite jaku lozinku od najmanje 6 karaktera
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handlePasswordChange} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="new-pw">Nova lozinka</Label>
-            <div className="relative">
-              <Input
-                id="new-pw"
-                type={showPw ? "text" : "password"}
-                value={newPw}
-                onChange={(e) => { setNewPw(e.target.value); setPwMsg(null) }}
-                placeholder="Minimum 6 karaktera"
-                autoComplete="new-password"
-                className="pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-                style={{ color: "var(--text-muted)" }}
-                aria-label={showPw ? "Sakrij lozinku" : "Prikaži lozinku"}
-              >
-                {showPw ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="confirm-pw">Potvrdi lozinku</Label>
-            <Input
-              id="confirm-pw"
-              type={showPw ? "text" : "password"}
-              value={confirmPw}
-              onChange={(e) => { setConfirmPw(e.target.value); setPwMsg(null) }}
-              placeholder="Ponovite lozinku"
-              autoComplete="new-password"
-            />
-          </div>
-
-          {newPw && confirmPw && newPw === confirmPw && (
-            <div className="flex items-center gap-1.5">
-              <Check size={12} strokeWidth={2.5} style={{ color: "var(--green)" }} />
-              <span className="text-xs" style={{ color: "var(--green)", fontWeight: 600 }}>Lozinke se podudaraju</span>
-            </div>
-          )}
-
-          {pwMsg && (
-            <p
-              className="text-xs"
-              style={{ color: pwMsg.type === "ok" ? "var(--green)" : "var(--red)" }}
-            >
-              {pwMsg.text}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={pwLoading || !newPw || !confirmPw}
-            className="w-full rounded-xl py-2.5 text-sm transition-all"
-            style={{
-              background: pwLoading || !newPw || !confirmPw ? "var(--surface-raised)" : "var(--brand-tint)",
-              color: pwLoading || !newPw || !confirmPw ? "var(--text-muted)" : "var(--brand)",
-              border: `1px solid ${pwLoading || !newPw || !confirmPw ? "var(--border)" : "rgba(43,181,160,0.3)"}`,
-              fontWeight: 600,
-              cursor: pwLoading || !newPw || !confirmPw ? "not-allowed" : "pointer",
-              opacity: pwLoading ? 0.7 : 1,
-            }}
-          >
-            {pwLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 size={13} strokeWidth={2.25} className="animate-spin" />
-                Čuvanje…
-              </span>
-            ) : (
-              "Sačuvaj lozinku"
             )}
           </button>
         </form>
