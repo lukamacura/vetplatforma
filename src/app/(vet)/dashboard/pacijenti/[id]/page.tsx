@@ -7,10 +7,9 @@ import {
   Syringe,
   Stethoscope,
   Phone,
-  FileText,
-  ChevronDown,
   Loader2,
   Check,
+  Pencil,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
@@ -19,15 +18,8 @@ import { createClient } from "@/lib/supabase/client"
 import { stagger } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 import { SPECIES_LABEL, SPECIES_OPTIONS } from "@/lib/species"
-import type { Pet, Profile, AppointmentStatus, Species, Gender } from "@/lib/types"
-
-type ApptHistoryRow = {
-  id: string
-  scheduled_at: string
-  status: AppointmentStatus
-  service_name: string
-  vet_notes: string | null
-}
+import type { Pet, Profile, Species, Gender } from "@/lib/types"
+import { VisitTimeline } from "./visit-timeline"
 
 const GENDER_LABEL: Record<Gender, string> = {
   male: "Muški",
@@ -183,7 +175,6 @@ export default function PetProfilePage() {
   const [owner, setOwner] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [apptHistory, setApptHistory] = useState<ApptHistoryRow[]>([])
 
   const [editName, setEditName] = useState("")
   const [editSpecies, setEditSpecies] = useState<Species>("dog")
@@ -200,18 +191,12 @@ export default function PetProfilePage() {
   const [nextControlDate, setNextControlDate] = useState("")
   const [vaccineNote, setVaccineNote] = useState("")
 
-  const [expandedApptId, setExpandedApptId] = useState<string | null>(null)
-  const [apptNotesDraft, setApptNotesDraft] = useState<Record<string, string>>({})
-  const [apptNoteStatus, setApptNoteStatus] = useState<Record<string, SaveStatus>>({})
-
-  // Auto-save state for per-appointment notes (keyed by appointment id)
-  const apptNotesDraftRef = useRef<Record<string, string>>({})
-  const apptDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const apptSavedRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-
   // Auto-save state
   const [basicsStatus, setBasicsStatus] = useState<SaveStatus>("idle")
   const [datesStatus, setDatesStatus] = useState<SaveStatus>("idle")
+
+  // Profile edit mode — basics + name + notes are read-only until vet clicks "Izmeni profil"
+  const [isEditing, setIsEditing] = useState(false)
 
   // Prevent saves during initial data load
   const loadedRef = useRef(false)
@@ -278,34 +263,6 @@ export default function PetProfilePage() {
       const { data: ownerData } = await supabase.from("profiles").select("*").eq("id", p.owner_id).single()
       setOwner(ownerData as Profile)
 
-      const { data: apptData } = await supabase
-        .from("appointments")
-        .select("id, scheduled_at, status, service_id, vet_notes")
-        .eq("pet_id", petId)
-        .order("scheduled_at", { ascending: false })
-        .limit(25)
-
-      if (apptData && apptData.length > 0) {
-        const serviceIds = [...new Set(apptData.map((a: { service_id: string }) => a.service_id))]
-        const { data: svcs } = await supabase.from("services").select("id, name").in("id", serviceIds)
-        const svcMap: Record<string, string> = Object.fromEntries(
-          (svcs ?? []).map((s: { id: string; name: string }) => [s.id, s.name])
-        )
-        setApptHistory(
-          apptData.map(
-            (a: { id: string; scheduled_at: string; status: AppointmentStatus; service_id: string; vet_notes: string | null }) => ({
-              id: a.id,
-              scheduled_at: a.scheduled_at,
-              status: a.status,
-              service_name: svcMap[a.service_id] ?? "—",
-              vet_notes: a.vet_notes ?? null,
-            })
-          )
-        )
-      } else {
-        setApptHistory([])
-      }
-
       setLoading(false)
       loadedRef.current = true
     }
@@ -314,15 +271,11 @@ export default function PetProfilePage() {
 
   // Flush timers on unmount
   useEffect(() => {
-    const apptDebounce = apptDebounceRef.current
-    const apptSaved = apptSavedRef.current
     return () => {
       if (basicsDebounceRef.current) clearTimeout(basicsDebounceRef.current)
       if (basicsSavedRef.current)    clearTimeout(basicsSavedRef.current)
       if (datesDebounceRef.current)  clearTimeout(datesDebounceRef.current)
       if (datesSavedRef.current)     clearTimeout(datesSavedRef.current)
-      Object.values(apptDebounce).forEach(clearTimeout)
-      Object.values(apptSaved).forEach(clearTimeout)
     }
   }, [])
 
@@ -384,45 +337,16 @@ export default function PetProfilePage() {
     datesDebounceRef.current = setTimeout(() => saveDates(), 600)
   }, [saveDates])
 
-  const saveApptNote = useCallback(async (apptId: string) => {
-    const text = apptNotesDraftRef.current[apptId] ?? ""
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("appointments")
-      .update({ vet_notes: text.trim() || null })
-      .eq("id", apptId)
-    if (!error) {
-      setApptHistory((prev) =>
-        prev.map((a) => (a.id === apptId ? { ...a, vet_notes: text.trim() || null } : a))
-      )
-      setApptNoteStatus((prev) => ({ ...prev, [apptId]: "saved" }))
-      if (apptSavedRef.current[apptId]) clearTimeout(apptSavedRef.current[apptId])
-      apptSavedRef.current[apptId] = setTimeout(
-        () => setApptNoteStatus((prev) => ({ ...prev, [apptId]: "idle" })),
-        1800
-      )
-    } else {
-      setApptNoteStatus((prev) => ({ ...prev, [apptId]: "idle" }))
-    }
-  }, [])
-
-  const triggerApptNoteSave = useCallback((apptId: string) => {
-    setApptNoteStatus((prev) => ({ ...prev, [apptId]: "saving" }))
-    if (apptDebounceRef.current[apptId]) clearTimeout(apptDebounceRef.current[apptId])
-    apptDebounceRef.current[apptId] = setTimeout(() => saveApptNote(apptId), 600)
-  }, [saveApptNote])
-
-  function toggleApptExpand(apptId: string) {
-    if (expandedApptId === apptId) {
-      setExpandedApptId(null)
-    } else {
-      setExpandedApptId(apptId)
-      const existing = apptHistory.find((a) => a.id === apptId)
-      if (existing && !(apptId in apptNotesDraft)) {
-        setApptNotesDraft((prev) => ({ ...prev, [apptId]: existing.vet_notes ?? "" }))
-        apptNotesDraftRef.current[apptId] = existing.vet_notes ?? ""
+  function toggleEdit() {
+    if (isEditing) {
+      // Leaving edit mode — flush any pending debounced basics save immediately
+      if (basicsDebounceRef.current) {
+        clearTimeout(basicsDebounceRef.current)
+        basicsDebounceRef.current = null
+        saveBasics()
       }
     }
+    setIsEditing((v) => !v)
   }
 
   if (loading) {
@@ -461,9 +385,10 @@ export default function PetProfilePage() {
   if (editBreed.trim()) subtitleParts.push(editBreed.trim())
   if (ageStr) subtitleParts.push(ageStr)
 
-  const basicsRows: { label: string; editField: React.ReactNode }[] = [
+  const basicsRows: { label: string; display: React.ReactNode; mono?: boolean; editField: React.ReactNode }[] = [
     {
       label: "Vrsta",
+      display: SPECIES_LABEL[editSpecies],
       editField: (
         <select
           value={editSpecies}
@@ -483,6 +408,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Rasa",
+      display: editBreed.trim() || null,
       editField: (
         <Input
           value={editBreed}
@@ -498,6 +424,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Pol",
+      display: GENDER_LABEL[editGender],
       editField: (
         <select
           value={editGender}
@@ -517,6 +444,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Datum rođenja",
+      display: formatDate(editBirthDate),
       editField: (
         <Input
           type="date"
@@ -532,6 +460,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Boja",
+      display: editColor.trim() || null,
       editField: (
         <Input
           value={editColor}
@@ -547,6 +476,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Težina",
+      display: weightKg ? `${weightKg} kg` : null,
       editField: (
         <div className="flex items-center gap-1.5">
           <Input
@@ -568,6 +498,8 @@ export default function PetProfilePage() {
     },
     {
       label: "ID mikročipa",
+      display: editChipId.trim() || null,
+      mono: true,
       editField: (
         <Input
           value={editChipId}
@@ -583,6 +515,7 @@ export default function PetProfilePage() {
     },
     {
       label: "Broj pasoša",
+      display: editPassport.trim() || null,
       editField: (
         <Input
           value={editPassport}
@@ -627,7 +560,40 @@ export default function PetProfilePage() {
             outlineOffset="2px"
           />
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg" style={{ fontWeight: 700 }}>{editName || pet.name}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              {isEditing ? (
+                <Input
+                  value={editName}
+                  onChange={(e) => {
+                    setEditName(e.target.value)
+                    basicsRef.current.name = e.target.value
+                    triggerBasicsSave()
+                  }}
+                  className="h-8 text-lg font-bold max-w-[260px]"
+                  style={{ fontWeight: 700 }}
+                  placeholder="Ime ljubimca"
+                />
+              ) : (
+                <h1 className="text-lg" style={{ fontWeight: 700 }}>{editName || pet.name}</h1>
+              )}
+              <button
+                type="button"
+                onClick={toggleEdit}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all"
+                style={{
+                  fontWeight: 600,
+                  background: isEditing ? "var(--brand)" : "var(--brand-tint)",
+                  color: isEditing ? "#fff" : "var(--brand)",
+                  border: isEditing ? "1px solid var(--brand)" : "1px solid color-mix(in srgb, var(--brand) 25%, transparent)",
+                }}
+              >
+                {isEditing ? (
+                  <><Check size={13} strokeWidth={2.5} /> Gotovo</>
+                ) : (
+                  <><Pencil size={12} strokeWidth={2} /> Izmeni profil</>
+                )}
+              </button>
+            </div>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
               {subtitleParts.join(" · ")}
             </p>
@@ -654,25 +620,34 @@ export default function PetProfilePage() {
               <span className="pulse-dot" style={{ background: "var(--red)", boxShadow: "0 0 0 3px color-mix(in srgb, var(--red) 20%, transparent)" }} />
               Beleške o ljubimcu
             </span>
-            <SaveIndicator status={basicsStatus} />
+            {isEditing && <SaveIndicator status={basicsStatus} />}
           </div>
-          <textarea
-            className="vet-notes-textarea w-full min-h-[64px] rounded-xl text-sm resize-y px-3 py-2"
-            style={{
-              background: "color-mix(in srgb, var(--red) 4%, var(--surface-raised))",
-              color: "var(--text-primary)",
-              lineHeight: 1.6,
-              fontFamily: "inherit",
-              border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)",
-            }}
-            placeholder="Beleške o ljubimcu…"
-            value={vetNotes}
-            onChange={(e) => {
-              setVetNotes(e.target.value)
-              basicsRef.current.vetNotes = e.target.value
-              triggerBasicsSave()
-            }}
-          />
+          {isEditing ? (
+            <textarea
+              className="vet-notes-textarea w-full min-h-[64px] rounded-xl text-sm resize-y px-3 py-2"
+              style={{
+                background: "color-mix(in srgb, var(--red) 4%, var(--surface-raised))",
+                color: "var(--text-primary)",
+                lineHeight: 1.6,
+                fontFamily: "inherit",
+                border: "1px solid color-mix(in srgb, var(--red) 30%, transparent)",
+              }}
+              placeholder="Beleške o ljubimcu…"
+              value={vetNotes}
+              onChange={(e) => {
+                setVetNotes(e.target.value)
+                basicsRef.current.vetNotes = e.target.value
+                triggerBasicsSave()
+              }}
+            />
+          ) : (
+            <p
+              className="text-sm whitespace-pre-wrap"
+              style={{ color: vetNotes ? "var(--text-primary)" : "var(--text-muted)", lineHeight: 1.6 }}
+            >
+              {vetNotes || "Nema beleški."}
+            </p>
+          )}
         </div>
       </motion.div>
 
@@ -692,7 +667,11 @@ export default function PetProfilePage() {
                 style={{ borderColor: "var(--border)" }}
               >
                 <FieldLabel>{row.label}</FieldLabel>
-                <div className="mt-1">{row.editField}</div>
+                {isEditing ? (
+                  <div className="mt-1">{row.editField}</div>
+                ) : (
+                  <FieldValue mono={row.mono}>{row.display}</FieldValue>
+                )}
               </div>
             ))}
           </dl>
@@ -763,108 +742,15 @@ export default function PetProfilePage() {
 
       </div>{/* /grid */}
 
-      {/* Posete — full width, below everything */}
+      {/* Posete — full width, below everything. Shows the most recent few;
+          the rest live on the standalone /posete history page. */}
       <motion.div variants={stagger.item} className="solid-card rounded-2xl p-5 w-full">
-            <h3 className="text-sm mb-4" style={{ fontWeight: 600 }}>Sve posete</h3>
-        <div className="relative pl-1">
-          <ul className="space-y-0">
-            {apptHistory.map((appt, idx) => {
-              const d = new Date(appt.scheduled_at)
-              const dateStr = d.toLocaleDateString("sr-Latn-RS", { day: "2-digit", month: "short", year: "numeric" })
-              const timeStr = d.toLocaleTimeString("sr-Latn-RS", { hour: "2-digit", minute: "2-digit" })
-              const isLast = idx === apptHistory.length - 1
-              const isFirst = idx === 0
-              const statusBadge =
-                appt.status === "confirmed"
-                  ? { cls: "badge-brand", label: "Potvrđen" }
-                  : appt.status === "cancelled"
-                    ? { cls: "badge-muted", label: "Otkazan" }
-                    : { cls: "badge-red", label: "Nije došao" }
-              const dotMuted = appt.status !== "confirmed"
-              const isExpanded = expandedApptId === appt.id
-              const hasNotes = !!appt.vet_notes
-              return (
-                <li key={appt.id} className={`relative pl-7 ${isLast ? "" : "pb-6"}`}>
-                  {!isLast && (
-                    <span className="absolute left-[4px] top-4 bottom-0 w-px" style={{ background: "var(--border)" }} aria-hidden />
-                  )}
-                  <span
-                    className={cn(
-                      "absolute left-0 top-1.5 size-2.5 rounded-full z-1",
-                      isFirst && !dotMuted && "timeline-dot-active"
-                    )}
-                    style={isFirst && !dotMuted ? undefined : {
-                      background: dotMuted ? "var(--border-strong)" : "var(--brand)",
-                      boxShadow: dotMuted ? "none" : "0 0 0 3px var(--brand-tint)",
-                    }}
-                  />
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => toggleApptExpand(appt.id)}
-                      className="w-full text-left group"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2 gap-y-1">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>{appt.service_name}</p>
-                            {hasNotes && !isExpanded && (
-                              <FileText size={12} strokeWidth={2} className="shrink-0 opacity-40" />
-                            )}
-                          </div>
-                          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{dateStr} · {timeStr}</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className={`badge ${statusBadge.cls}`}>{statusBadge.label}</span>
-                          <ChevronDown
-                            size={14}
-                            strokeWidth={2}
-                            className="transition-transform duration-200 opacity-40 group-hover:opacity-70"
-                            style={{ transform: isExpanded ? "rotate(180deg)" : undefined }}
-                          />
-                        </div>
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        transition={{ duration: 0.2 }}
-                        className="mt-3 overflow-hidden"
-                      >
-                        <div className="flex items-center justify-between">
-                          <FieldLabel>Beleške sa posete</FieldLabel>
-                          <SaveIndicator status={apptNoteStatus[appt.id] ?? "idle"} />
-                        </div>
-                        <textarea
-                          className="vet-notes-textarea w-full min-h-[80px] rounded-xl text-sm resize-y px-3 py-2 mt-1.5"
-                          style={{
-                            background: "var(--surface-raised)",
-                            color: "var(--text-primary)",
-                            lineHeight: 1.6,
-                            fontFamily: "inherit",
-                          }}
-                          placeholder="Dodaj beleške za ovu posetu…"
-                          value={apptNotesDraft[appt.id] ?? appt.vet_notes ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value
-                            setApptNotesDraft((prev) => ({ ...prev, [appt.id]: val }))
-                            apptNotesDraftRef.current[appt.id] = val
-                            triggerApptNoteSave(appt.id)
-                          }}
-                        />
-                      </motion.div>
-                    )}
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-          {apptHistory.length === 0 && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>Nema termina.</p>
-          )}
-        </div>
+        <h3 className="text-sm mb-4" style={{ fontWeight: 600 }}>Poslednje posete</h3>
+        <VisitTimeline
+          petId={pet.id}
+          limit={4}
+          viewAllHref={`/dashboard/pacijenti/${pet.id}/posete`}
+        />
       </motion.div>
     </motion.div>
   )
