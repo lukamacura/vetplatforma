@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import {
   PawPrint, CalendarDays, History, Syringe, Stethoscope,
   Clock, ChevronRight, Sparkles, AlertTriangle, ChevronDown,
-  NotebookIcon, MapPin,
+  MapPin,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
@@ -230,17 +230,19 @@ export default function OwnerHomePage() {
   })
 
   // A pet with any upcoming confirmed appointment is considered "covered":
-  // its reminders are shown in a calm section rather than the alarm banner.
+  // its due is handled by that appointment, so it drops out of the action list.
   const bookedPetIds = new Set(Object.keys(nextApptMap))
 
-  const urgentReminders = reminders.filter(
-    (r) => (r.severity === "overdue" || r.severity === "soon") && !bookedPetIds.has(r.petId)
-  )
-  const coveredReminders = reminders.filter(
-    (r) => (r.severity === "overdue" || r.severity === "soon") && bookedPetIds.has(r.petId)
-  )
-  const okReminders = reminders.filter((r) => r.severity === "ok")
-  const planReminders = reminders.filter((r) => !bookedPetIds.has(r.petId))
+  // The single source of truth for "needs the owner to act": overdue/soon dues
+  // with no appointment booked yet, most-overdue first. Far-future ("ok") dues are
+  // intentionally omitted — the pet card pill already shows them.
+  const actionReminders = reminders
+    .filter((r) => (r.severity === "overdue" || r.severity === "soon") && !bookedPetIds.has(r.petId))
+    .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
+  const hasOverdue = actionReminders.some((r) => r.severity === "overdue")
+  // All-clear only when dates ARE tracked and nothing needs booking — avoids false
+  // reassurance for an owner who simply hasn't entered any vaccine/control dates.
+  const allClear = actionReminders.length === 0 && reminders.length > 0
 
   if (loading) {
     return (
@@ -279,7 +281,7 @@ export default function OwnerHomePage() {
           <div
             className="rounded-2xl p-4 flex items-center gap-3"
             style={{
-              background: "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)",
+              background: "var(--amber-tint)",
               border: "1px solid rgba(217,119,6,0.2)",
             }}
           >
@@ -296,59 +298,14 @@ export default function OwnerHomePage() {
         </motion.div>
       )}
 
-      {/* ── Clinic card ── */}
-      {clinic && (
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            {clinic.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={clinic.logo_url}
-                alt={clinic.name}
-                width={64}
-                height={64}
-                className="rounded-full object-cover shrink-0"
-                style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
-              />
-            ) : (
-              <div className="icon-lg icon-brand shrink-0" style={{ width: 64, height: 64, borderRadius: "50%" }}>
-                <PawPrint size={26} strokeWidth={1.75} />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
-              {clinic.address && (
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(clinic.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs mt-0.5"
-                  style={{ color: "var(--brand)", fontWeight: 600 }}
-                >
-                  <MapPin size={11} strokeWidth={2.5} />
-                  Prikaži na mapi
-                </a>
-              )}
-            </div>
-          </div>
-          {clinic.description && (
-            <p className="text-sm mt-3" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
-              {clinic.description}
-            </p>
-          )}
-        </motion.div>
-      )}
-
-      {/* ── Urgent reminders banner ── */}
-      {urgentReminders.length > 0 && (
+      {/* ── Action needed: dues with no appointment booked yet ── */}
+      {actionReminders.length > 0 && (
         <motion.div variants={stagger.item}>
           <div
             className="rounded-2xl p-4"
             style={{
-              background: urgentReminders.some((r) => r.severity === "overdue")
-                ? "linear-gradient(135deg, var(--red-tint) 0%, #FFF5F5 100%)"
-                : "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)",
-              border: urgentReminders.some((r) => r.severity === "overdue")
+              background: hasOverdue ? "var(--red-tint)" : "var(--amber-tint)",
+              border: hasOverdue
                 ? "1px solid rgba(220,38,38,0.18)"
                 : "1px solid rgba(217,119,6,0.18)",
             }}
@@ -357,10 +314,8 @@ export default function OwnerHomePage() {
               <div
                 className="icon-sm shrink-0"
                 style={{
-                  background: urgentReminders.some((r) => r.severity === "overdue")
-                    ? "rgba(220,38,38,0.12)" : "rgba(217,119,6,0.12)",
-                  color: urgentReminders.some((r) => r.severity === "overdue")
-                    ? "var(--red)" : "var(--amber)",
+                  background: hasOverdue ? "rgba(220,38,38,0.12)" : "rgba(217,119,6,0.12)",
+                  color: hasOverdue ? "var(--red)" : "var(--amber)",
                   borderRadius: 8,
                 }}
               >
@@ -368,9 +323,7 @@ export default function OwnerHomePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-sm" style={{ fontWeight: 700 }}>
-                  {urgentReminders.some((r) => r.severity === "overdue")
-                    ? "Potrebna pažnja"
-                    : "Uskoro ističe"}
+                  {hasOverdue ? "Treba zakazati termin" : "Uskoro ističe"}
                 </h2>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                   Vakcinacije i pregledi za koje još nije zakazan termin.
@@ -379,7 +332,7 @@ export default function OwnerHomePage() {
             </div>
 
             <div className="space-y-2">
-              {urgentReminders.map((r) => (
+              {actionReminders.map((r) => (
                 <div
                   key={`${r.petId}-${r.type}`}
                   className="flex items-center gap-3 rounded-xl px-3 py-2.5"
@@ -393,21 +346,26 @@ export default function OwnerHomePage() {
                     <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>
                       {r.petName}
                     </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                      {r.type === "vaccine"
+                        ? <Syringe size={11} strokeWidth={2.5} />
+                        : <Stethoscope size={11} strokeWidth={2.5} />
+                      }
                       {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
                     </p>
                   </div>
                   <span
-                    className={`badge ${r.severity === "overdue" ? "badge-red" : "badge-amber"}`}
+                    className={`badge shrink-0 ${r.severity === "overdue" ? "badge-red" : "badge-amber"}`}
                     style={{ gap: 4 }}
                   >
                     {r.severity === "overdue" && <span className="pulse-dot" />}
-                    {r.type === "vaccine"
-                      ? <Syringe size={10} strokeWidth={2.5} />
-                      : <Stethoscope size={10} strokeWidth={2.5} />
-                    }
                     {daysUntilText(r.date)}
                   </span>
+                  <Link href="/klijent/zakazivanje" className="shrink-0">
+                    <button className="btn-primary px-3 py-1.5 text-xs">
+                      Zakaži
+                    </button>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -443,7 +401,7 @@ export default function OwnerHomePage() {
           <div
             className="rounded-2xl p-6 text-center"
             style={{
-              background: "linear-gradient(135deg, var(--brand-tint) 0%, #F0FDF9 100%)",
+              background: "var(--brand-tint)",
               border: "1px solid rgba(43,181,160,0.15)",
             }}
           >
@@ -524,7 +482,7 @@ export default function OwnerHomePage() {
                       )}
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {a.pet_name} · {formatDateTimeNumericBelgrade(a.scheduled_at)}
+                      {a.pet_name}
                     </p>
                   </div>
 
@@ -572,74 +530,13 @@ export default function OwnerHomePage() {
         )}
       </motion.div>
 
-      {/* ── Covered reminders (vaccine/control due, but appt already booked) ── */}
-      {coveredReminders.length > 0 && (
+      {/* ── All clear: dates are tracked and nothing needs booking ── */}
+      {allClear && (
         <motion.div variants={stagger.item}>
           <div
             className="rounded-2xl p-4"
             style={{
-              background: "linear-gradient(135deg, var(--green-tint) 0%, #F0FDF4 100%)",
-              border: "1px solid rgba(22,163,74,0.18)",
-            }}
-          >
-            <div className="flex items-start gap-2 mb-3">
-              <div
-                className="icon-sm shrink-0"
-                style={{
-                  background: "rgba(22,163,74,0.12)",
-                  color: "var(--green)",
-                  borderRadius: 8,
-                }}
-              >
-                <Sparkles size={14} strokeWidth={2.25} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-sm" style={{ fontWeight: 700 }}>
-                  Podsetnici sa zakazanim terminom
-                </h2>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  Predstojeći termin obuhvata ove vakcinacije ili preglede.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {coveredReminders.map((r) => (
-                <div
-                  key={`covered-${r.petId}-${r.type}`}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5"
-                  style={{
-                    background: "rgba(255,255,255,0.75)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={32} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>
-                      {r.petName}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
-                    </p>
-                  </div>
-                  <span className="badge badge-green" style={{ gap: 4 }}>
-                    <CalendarDays size={10} strokeWidth={2.5} />
-                    {formatDateTimeNumericBelgrade(nextApptMap[r.petId])}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* ── Reminders (all clear / ok) ── */}
-      {okReminders.length > 0 && urgentReminders.length === 0 && (
-        <motion.div variants={stagger.item}>
-          <div
-            className="rounded-2xl p-4"
-            style={{
-              background: "linear-gradient(135deg, var(--green-tint) 0%, #F0FDF4 100%)",
+              background: "var(--green-tint)",
               border: "1px solid rgba(22,163,74,0.15)",
             }}
           >
@@ -681,7 +578,7 @@ export default function OwnerHomePage() {
           <div
             className="rounded-2xl p-6 text-center"
             style={{
-              background: "linear-gradient(135deg, var(--blue-tint) 0%, #EFF6FF 100%)",
+              background: "var(--blue-tint)",
               border: "1px solid rgba(37,99,235,0.12)",
             }}
           >
@@ -714,61 +611,46 @@ export default function OwnerHomePage() {
         )}
       </motion.div>
 
-      {/* ── Plan za dalje (vakcine + kontrolni pregledi bez zakazanog termina) ── */}
-      {planReminders.length > 0 && (
-        <motion.div variants={stagger.item} className="space-y-3">
-          <div className="flex items-start gap-2">
-            <div className="icon-sm icon-amber shrink-0">
-              <NotebookIcon size={13} strokeWidth={2.25} />
-            </div>
+      {/* ── Clinic card (reference info) ── */}
+      {clinic && (
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-4">
+          <div className="flex items-center gap-3">
+            {clinic.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={clinic.logo_url}
+                alt={clinic.name}
+                width={64}
+                height={64}
+                className="rounded-full object-cover shrink-0"
+                style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
+              />
+            ) : (
+              <div className="icon-lg icon-brand shrink-0" style={{ width: 64, height: 64, borderRadius: "50%" }}>
+                <PawPrint size={26} strokeWidth={1.75} />
+              </div>
+            )}
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm" style={{ fontWeight: 700 }}>Podsetnici, plan za dalje</h3>
-              <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                Vakcinacije i kontrolni pregledi za koje još nije zakazan termin.
-              </p>
+              <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
+              {clinic.address && (
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(clinic.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs mt-0.5"
+                  style={{ color: "var(--brand)", fontWeight: 600 }}
+                >
+                  <MapPin size={11} strokeWidth={2.5} />
+                  Prikaži na mapi
+                </a>
+              )}
             </div>
           </div>
-          <div
-            className="rounded-2xl p-3 space-y-1"
-            style={{
-              background: "linear-gradient(135deg, var(--amber-tint) 0%, #FFFBEB 100%)",
-              border: "1px solid rgba(217,119,6,0.15)",
-            }}
-          >
-            {[...planReminders]
-              .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
-              .map((r, i, arr) => (
-                <div
-                  key={`plan-${r.petId}-${r.type}`}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2"
-                  style={{
-                    background: "rgba(255,255,255,0.75)",
-                    backdropFilter: "blur(8px)",
-                    marginBottom: i === arr.length - 1 ? 0 : undefined,
-                  }}
-                >
-                  <PetAvatar photoUrl={r.petPhotoUrl} species={r.petSpecies} size={28} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm" style={{ fontWeight: 600 }}>{r.petName}</p>
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
-                    </p>
-                  </div>
-                  <span
-                    className={`badge ${
-                      r.severity === "overdue" ? "badge-red" : r.severity === "soon" ? "badge-amber" : "badge-green"
-                    }`}
-                  >
-                    {r.severity !== "ok" && <span className="pulse-dot" />}
-                    {r.type === "vaccine"
-                      ? <Syringe size={10} strokeWidth={2.5} />
-                      : <Stethoscope size={10} strokeWidth={2.5} />
-                    }
-                    {formatDateNumeric(r.date)}
-                  </span>
-                </div>
-              ))}
-          </div>
+          {clinic.description && (
+            <p className="text-sm mt-3" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
+              {clinic.description}
+            </p>
+          )}
         </motion.div>
       )}
 
