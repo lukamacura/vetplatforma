@@ -106,6 +106,7 @@ export default function OwnerHomePage() {
   const [cancelTarget, setCancelTarget] = useState<AppointmentRow | null>(null)
   const [cancelling, setCancelling] = useState(false)
   const [showAllUpcoming, setShowAllUpcoming] = useState(false)
+  const [showAllPast, setShowAllPast] = useState(false)
   const [lastVisitMap, setLastVisitMap] = useState<Record<string, string>>({})
   const [nextApptMap, setNextApptMap] = useState<Record<string, string>>({})
 
@@ -236,11 +237,13 @@ export default function OwnerHomePage() {
   // its due is handled by that appointment, so it drops out of the action list.
   const bookedPetIds = new Set(Object.keys(nextApptMap))
 
-  // The single source of truth for "needs the owner to act": overdue/soon dues
-  // with no appointment booked yet, most-overdue first. Far-future ("ok") dues are
-  // intentionally omitted — the pet card pill already shows them.
+  // The single source of truth for "needs the owner to act", most-overdue first.
+  // Far-future ("ok") dues are intentionally omitted — the pet card pill shows them.
+  //   • "overdue" — the deadline already passed, so it ALWAYS surfaces. A booking
+  //     for an unrelated service must not falsely report the pet as all-clear.
+  //   • "soon" — not late yet, so a booked appointment is treated as handling it.
   const actionReminders = reminders
-    .filter((r) => (r.severity === "overdue" || r.severity === "soon") && !bookedPetIds.has(r.petId))
+    .filter((r) => r.severity === "overdue" || (r.severity === "soon" && !bookedPetIds.has(r.petId)))
     .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
   const hasOverdue = actionReminders.some((r) => r.severity === "overdue")
   // All-clear only when dates ARE tracked and nothing needs booking — avoids false
@@ -285,6 +288,49 @@ export default function OwnerHomePage() {
           Zdravstveni podaci i termini Vaših ljubimaca
         </p>
       </motion.div>
+
+      {/* ── Connected clinic card ── */}
+      {clinic && (
+        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-4">
+          <div className="flex items-center gap-3">
+            {clinic.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={clinic.logo_url}
+                alt={clinic.name}
+                width={64}
+                height={64}
+                className="rounded-full object-cover shrink-0"
+                style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
+              />
+            ) : (
+              <div className="icon-lg icon-brand shrink-0" style={{ width: 64, height: 64, borderRadius: "50%" }}>
+                <PawPrint size={26} strokeWidth={1.75} />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
+              {clinic.address && (
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(clinic.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs mt-0.5"
+                  style={{ color: "var(--brand)", fontWeight: 600 }}
+                >
+                  <MapPin size={11} strokeWidth={2.5} />
+                  Prikaži na mapi
+                </a>
+              )}
+            </div>
+          </div>
+          {clinic.description && (
+            <p className="text-sm mt-3" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
+              {clinic.description}
+            </p>
+          )}
+        </motion.div>
+      )}
 
       {/* ── Pending connection banner ── */}
       {hasPendingConn && !clinic && (
@@ -388,7 +434,9 @@ export default function OwnerHomePage() {
                         ? <Syringe size={11} strokeWidth={2.5} />
                         : <Stethoscope size={11} strokeWidth={2.5} />
                       }
-                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                      {r.severity === "overdue"
+                        ? (r.type === "vaccine" ? "Kasni vakcinacija — zakažite što pre" : "Kasni kontrolni pregled — zakažite što pre")
+                        : (r.type === "vaccine" ? "Vakcinacija uskoro" : "Kontrolni pregled uskoro")}
                     </p>
                   </div>
                   <span
@@ -608,63 +656,32 @@ export default function OwnerHomePage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-3 grid-cols-1">
+          <div
+            className="flex gap-3 overflow-x-auto py-1"
+            style={{
+              scrollSnapType: "x mandatory",
+              scrollBehavior: "smooth",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             {pets.map((pet) => (
-              <PetCard
+              <div
                 key={pet.id}
-                pet={pet}
-                variant="owner"
-                onClick={() => router.push(`/klijent/ljubimci/${pet.id}/uredi`)}
-                lastVisitDate={lastVisitMap[pet.id]}
-                nextApptDate={nextApptMap[pet.id]}
-              />
+                className="shrink-0"
+                style={{ width: "min(85%, 320px)", scrollSnapAlign: "start" }}
+              >
+                <PetCard
+                  pet={pet}
+                  variant="owner"
+                  onClick={() => router.push(`/klijent/ljubimci/${pet.id}/uredi`)}
+                  lastVisitDate={lastVisitMap[pet.id]}
+                  nextApptDate={nextApptMap[pet.id]}
+                />
+              </div>
             ))}
           </div>
         )}
       </motion.div>
-
-      {/* ── Clinic card (reference info) ── */}
-      {clinic && (
-        <motion.div variants={stagger.item} className="solid-card rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            {clinic.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={clinic.logo_url}
-                alt={clinic.name}
-                width={64}
-                height={64}
-                className="rounded-full object-cover shrink-0"
-                style={{ width: 64, height: 64, border: "1px solid var(--border)" }}
-              />
-            ) : (
-              <div className="icon-lg icon-brand shrink-0" style={{ width: 64, height: 64, borderRadius: "50%" }}>
-                <PawPrint size={26} strokeWidth={1.75} />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm" style={{ fontWeight: 700 }}>{clinic.name}</p>
-              {clinic.address && (
-                <a
-                  href={`https://maps.google.com/?q=${encodeURIComponent(clinic.address)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs mt-0.5"
-                  style={{ color: "var(--brand)", fontWeight: 600 }}
-                >
-                  <MapPin size={11} strokeWidth={2.5} />
-                  Prikaži na mapi
-                </a>
-              )}
-            </div>
-          </div>
-          {clinic.description && (
-            <p className="text-sm mt-3" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
-              {clinic.description}
-            </p>
-          )}
-        </motion.div>
-      )}
 
       {/* ── Past appointment history ── */}
       {pastAppts.length > 0 && (
@@ -674,7 +691,7 @@ export default function OwnerHomePage() {
             <h2 className="font-semibold">Istorija poseta</h2>
           </div>
           <div className="space-y-2">
-            {pastAppts.map((a) => {
+            {(showAllPast ? pastAppts : pastAppts.slice(0, 4)).map((a) => {
               const statusCfg =
                 a.status === "confirmed"
                   ? { cls: "badge-brand", label: "Završen" }
@@ -696,6 +713,23 @@ export default function OwnerHomePage() {
                 </div>
               )
             })}
+            {!showAllPast && pastAppts.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setShowAllPast(true)}
+                className="w-full py-2 text-xs flex items-center justify-center gap-1 rounded-lg"
+                style={{
+                  fontWeight: 600,
+                  color: "var(--brand)",
+                  background: "var(--brand-tint)",
+                  border: "1px solid rgba(43,181,160,0.15)",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                <ChevronDown size={14} strokeWidth={2} />
+                Sve posete ({pastAppts.length})
+              </button>
+            )}
           </div>
         </div>
       )}
