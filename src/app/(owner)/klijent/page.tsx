@@ -57,7 +57,7 @@ function dateStatus(dateStr: string | null | undefined): DateSeverity {
 
 function daysUntilText(dateStr: string): string {
   const d = parseCalendarDate(dateStr)
-  if (!d) return "—"
+  if (!d) return "-"
   const days = calendarDaysFromToday(d)
   if (days < 0) {
     const n = Math.abs(days)
@@ -172,8 +172,8 @@ export default function OwnerHomePage() {
         const pMap = Object.fromEntries((petsList ?? []).map((p: { id: string; name: string }) => [p.id, p.name]))
         const enrich = (a: Appointment) => ({
           ...a,
-          service_name: sMap[a.service_id] ?? "—",
-          pet_name: pMap[a.pet_id] ?? "—",
+          service_name: sMap[a.service_id] ?? "-",
+          pet_name: pMap[a.pet_id] ?? "-",
         })
         setAppointments((upcomingData ?? []).map(enrich))
         setPastAppts((pastData ?? []).map(enrich))
@@ -238,15 +238,15 @@ export default function OwnerHomePage() {
   const bookedPetIds = new Set(Object.keys(nextApptMap))
 
   // The single source of truth for "needs the owner to act", most-overdue first.
-  // Far-future ("ok") dues are intentionally omitted — the pet card pill shows them.
-  //   • "overdue" — the deadline already passed, so it ALWAYS surfaces. A booking
+  // Far-future ("ok") dues are intentionally omitted - the pet card pill shows them.
+  //   • "overdue" - the deadline already passed, so it ALWAYS surfaces. A booking
   //     for an unrelated service must not falsely report the pet as all-clear.
-  //   • "soon" — not late yet, so a booked appointment is treated as handling it.
+  //   • "soon" - not late yet, so a booked appointment is treated as handling it.
   const actionReminders = reminders
     .filter((r) => r.severity === "overdue" || (r.severity === "soon" && !bookedPetIds.has(r.petId)))
     .sort((a, b) => (parseCalendarDate(a.date)?.getTime() ?? 0) - (parseCalendarDate(b.date)?.getTime() ?? 0))
   const hasOverdue = actionReminders.some((r) => r.severity === "overdue")
-  // All-clear only when dates ARE tracked and nothing needs booking — avoids false
+  // All-clear only when dates ARE tracked and nothing needs booking - avoids false
   // reassurance for an owner who simply hasn't entered any vaccine/control dates.
   const allClear = actionReminders.length === 0 && reminders.length > 0
 
@@ -404,11 +404,11 @@ export default function OwnerHomePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-sm" style={{ fontWeight: 700 }}>
-                  {hasOverdue ? "Termin kasni — zakažite što pre" : "Termin uskoro ističe"}
+                  {hasOverdue ? "Termin kasni - zakažite što pre" : "Termin uskoro ističe"}
                 </h2>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
                   {hasOverdue
-                    ? "Vakcinacija ili pregled je prošao rok, a termin još nije zakazan."
+                    ? "Vakcinaciji ili pregledu je prošao rok, a termin još nije zakazan."
                     : "Vakcinacije i pregledi za koje još nije zakazan termin."}
                 </p>
               </div>
