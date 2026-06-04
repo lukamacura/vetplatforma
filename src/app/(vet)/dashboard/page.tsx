@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CalendarDays, Users, ChevronRight, ChevronLeft, CalendarPlus, MessageSquare, Eye, UserPlus, Check, ChevronDown, Phone } from "lucide-react"
 import { motion } from "framer-motion"
 import Link from "next/link"
@@ -199,12 +199,23 @@ export default function DashboardPage() {
     init()
   }, [])
 
-  // Load appointments when clinicId or selectedDate changes
-  useEffect(() => {
+  // Reload confirmed-connection count (for focus refresh)
+  const loadConnectedCount = useCallback(async () => {
     if (!clinicId) return
-    async function loadAppointments() {
-      setLoading(true)
-      const supabase = createClient()
+    const supabase = createClient()
+    const { count } = await supabase
+      .from("connections").select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicId)
+      .eq("status", "confirmed")
+    setConnectedCount(count ?? 0)
+  }, [clinicId])
+
+  // Load appointments + owner notes for the selected day.
+  // `silent` skips the loading flicker for background (realtime/focus) refreshes.
+  const loadAppointments = useCallback(async (silent = false) => {
+    if (!clinicId) return
+    if (!silent) setLoading(true)
+    const supabase = createClient()
 
       const dayStart = new Date(selectedDate)
       dayStart.setHours(0, 0, 0, 0)
@@ -269,16 +280,15 @@ export default function DashboardPage() {
         setOwnerNames({})
       }
 
-      setLoading(false)
-    }
-    loadAppointments()
+      if (!silent) setLoading(false)
   }, [clinicId, selectedDate])
 
+  useEffect(() => { loadAppointments() }, [loadAppointments])
+
   // Load appointment counts for each day in the viewed month (dots)
-  useEffect(() => {
+  const loadMonthCounts = useCallback(async () => {
     if (!clinicId) return
-    async function loadMonthCounts() {
-      const supabase = createClient()
+    const supabase = createClient()
       const monthStart = new Date(viewYear, viewMonth, 1)
       const monthEnd   = new Date(viewYear, viewMonth + 1, 0, 23, 59, 59, 999)
       const { data } = await supabase
@@ -293,16 +303,15 @@ export default function DashboardPage() {
         counts[key] = (counts[key] ?? 0) + 1
       }
       setMonthDotCounts(counts)
-    }
-    loadMonthCounts()
   }, [clinicId, viewYear, viewMonth])
+
+  useEffect(() => { loadMonthCounts() }, [loadMonthCounts])
 
   // Load pet reminders (vaccines + controls) for the viewed month.
   // RLS pets_vet restricts this to pets of connected owners.
-  useEffect(() => {
+  const loadMonthReminders = useCallback(async () => {
     if (!clinicId) return
-    async function loadMonthReminders() {
-      const supabase = createClient()
+    const supabase = createClient()
       const monthStart = dayKeyFromLocal(new Date(viewYear, viewMonth, 1))
       const monthEnd   = dayKeyFromLocal(new Date(viewYear, viewMonth + 1, 0))
 
@@ -340,9 +349,9 @@ export default function DashboardPage() {
         }
       }
       setMonthReminders(reminders)
-    }
-    loadMonthReminders()
   }, [clinicId, viewYear, viewMonth])
+
+  useEffect(() => { loadMonthReminders() }, [loadMonthReminders])
 
   // Realtime: listen for new pending connection requests
   useEffect(() => {
@@ -399,20 +408,82 @@ export default function DashboardPage() {
 
 
   // Load total unread messages count for this vet
+  const loadUnread = useCallback(async () => {
+    if (!clinicId || !vetId) return
+    const supabase = createClient()
+    const { count } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("clinic_id", clinicId)
+      .eq("receiver_id", vetId)
+      .eq("is_read", false)
+    setUnreadCount(count ?? 0)
+  }, [clinicId, vetId])
+
+  useEffect(() => { loadUnread() }, [loadUnread])
+
+  // Keep the latest loaders in a ref so realtime / focus handlers can call them
+  // without re-subscribing on every selectedDate or month change.
+  const loadersRef = useRef({
+    loadAppointments, loadMonthCounts, loadMonthReminders, loadUnread, loadConnectedCount,
+  })
+  useEffect(() => {
+    loadersRef.current = {
+      loadAppointments, loadMonthCounts, loadMonthReminders, loadUnread, loadConnectedCount,
+    }
+  })
+
+  // Realtime: new bookings / cancellations for this clinic → refresh day + month dots
+  useEffect(() => {
+    if (!clinicId) return
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`appointments-vet-${clinicId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments", filter: `clinic_id=eq.${clinicId}` },
+        () => {
+          loadersRef.current.loadAppointments(true)
+          loadersRef.current.loadMonthCounts()
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [clinicId])
+
+  // Realtime: keep the unread message badge live
   useEffect(() => {
     if (!clinicId || !vetId) return
-    async function loadUnread() {
-      const supabase = createClient()
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .eq("clinic_id", clinicId)
-        .eq("receiver_id", vetId)
-        .eq("is_read", false)
-      setUnreadCount(count ?? 0)
-    }
-    loadUnread()
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`messages-vet-dash-${clinicId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `clinic_id=eq.${clinicId}` },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as { receiver_id?: string }
+          if (row?.receiver_id !== vetId) return
+          loadersRef.current.loadUnread()
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
   }, [clinicId, vetId])
+
+  // Catch-all: refresh everything when the tab regains focus
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState !== "visible") return
+      const l = loadersRef.current
+      l.loadAppointments(true)
+      l.loadMonthCounts()
+      l.loadMonthReminders()
+      l.loadUnread()
+      l.loadConnectedCount()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [])
 
   const monthGrid = getMonthGrid(viewYear, viewMonth)
 

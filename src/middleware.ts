@@ -27,6 +27,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Build a redirect that carries over any auth cookies refreshed by
+  // `getUser()` below. Returning a bare `NextResponse.redirect` would drop the
+  // rotated Supabase tokens written onto `supabaseResponse`, leaving the
+  // browser holding a stale refresh token and silently logging the user out on
+  // the next request. See Supabase SSR middleware guidance.
+  const redirect = (to: string) => {
+    const response = NextResponse.redirect(new URL(to, request.url))
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      response.cookies.set(cookie)
+    })
+    return response
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
@@ -39,7 +52,7 @@ export async function middleware(request: NextRequest) {
     pathname === '/'
 
   if (!user && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    return redirect('/login')
   }
 
   if (user) {
@@ -52,15 +65,15 @@ export async function middleware(request: NextRequest) {
     const role = profile?.role ?? (user.user_metadata?.role as string | undefined)
 
     if (role === 'vet' && !pathname.startsWith('/dashboard') && !pathname.startsWith('/join') && !pathname.startsWith('/login') && !pathname.startsWith('/register') && !pathname.startsWith('/vets') && pathname !== '/') {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      return redirect('/dashboard')
     }
     if (role === 'owner' && pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/klijent', request.url))
+      return redirect('/klijent')
     }
 
     if (pathname === '/login' || pathname === '/register') {
       const dest = role === 'vet' ? '/dashboard' : '/klijent'
-      return NextResponse.redirect(new URL(dest, request.url))
+      return redirect(dest)
     }
 
     // Subscription gating for vets
@@ -82,7 +95,7 @@ export async function middleware(request: NextRequest) {
         if (clinic) {
           const status = clinic.subscription_status as string
           if (status === 'expired' || status === 'cancelled') {
-            return NextResponse.redirect(new URL('/dashboard/upgrade', request.url))
+            return redirect('/dashboard/upgrade')
           }
           if (status === 'trial' && clinic.trial_started_at) {
             const trialStart = new Date(clinic.trial_started_at)
@@ -94,7 +107,7 @@ export async function middleware(request: NextRequest) {
                 .from('clinics')
                 .update({ subscription_status: 'expired' })
                 .eq('id', clinicId)
-              return NextResponse.redirect(new URL('/dashboard/upgrade', request.url))
+              return redirect('/dashboard/upgrade')
             }
           }
         }
