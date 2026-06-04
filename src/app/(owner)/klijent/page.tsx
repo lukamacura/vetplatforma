@@ -429,23 +429,23 @@ export default function OwnerHomePage() {
                     <p className="text-sm leading-snug" style={{ fontWeight: 600 }}>
                       {r.petName}
                     </p>
-                    <p className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className="text-[11px] flex items-center gap-1" style={{ color: "var(--text-muted)", fontWeight: 600 }}>
                       {r.type === "vaccine"
                         ? <Syringe size={11} strokeWidth={2.5} />
                         : <Stethoscope size={11} strokeWidth={2.5} />
                       }
-                      {r.severity === "overdue"
-                        ? (r.type === "vaccine" ? "Kasni vakcinacija — zakažite što pre" : "Kasni kontrolni pregled — zakažite što pre")
-                        : (r.type === "vaccine" ? "Vakcinacija uskoro" : "Kontrolni pregled uskoro")}
-                    </p>
+                      {r.type === "vaccine" ? "Vakcinacija" : "Kontrolni pregled"}
+                    </span>
+                    <span
+                      className={`badge ${r.severity === "overdue" ? "badge-red" : "badge-amber"}`}
+                      style={{ gap: 4 }}
+                    >
+                      {r.severity === "overdue" && <span className="pulse-dot" />}
+                      {daysUntilText(r.date)}
+                    </span>
                   </div>
-                  <span
-                    className={`badge shrink-0 ${r.severity === "overdue" ? "badge-red" : "badge-amber"}`}
-                    style={{ gap: 4 }}
-                  >
-                    {r.severity === "overdue" && <span className="pulse-dot" />}
-                    {daysUntilText(r.date)}
-                  </span>
                   <Link href="/klijent/zakazivanje" className="shrink-0">
                     <button className="btn-primary px-3 py-1.5 text-xs">
                       Zakaži
