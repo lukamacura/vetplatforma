@@ -59,7 +59,10 @@ function daysUntilText(dateStr: string): string {
   const d = parseCalendarDate(dateStr)
   if (!d) return "—"
   const days = calendarDaysFromToday(d)
-  if (days < 0) return `${Math.abs(days)}d kasni`
+  if (days < 0) {
+    const n = Math.abs(days)
+    return n === 1 ? "Kasni 1 dan" : `Kasni ${n} dana`
+  }
   if (days === 0) return "Danas"
   if (days === 1) return "Sutra"
   return `Za ${days} dana`
@@ -244,6 +247,14 @@ export default function OwnerHomePage() {
   // reassurance for an owner who simply hasn't entered any vaccine/control dates.
   const allClear = actionReminders.length === 0 && reminders.length > 0
 
+  // Single health-status banner: red when anything is late, yellow when something
+  // is due soon, green when dates are tracked and nothing needs the owner to act.
+  const statusLevel: "overdue" | "soon" | "clear" | null =
+    hasOverdue ? "overdue"
+    : actionReminders.length > 0 ? "soon"
+    : allClear ? "clear"
+    : null
+
   if (loading) {
     return (
       <div className="space-y-4 pt-2">
@@ -298,8 +309,32 @@ export default function OwnerHomePage() {
         </motion.div>
       )}
 
-      {/* ── Action needed: dues with no appointment booked yet ── */}
-      {actionReminders.length > 0 && (
+      {/* ── Health status: one banner, severity-driven (red → yellow → green) ── */}
+      {statusLevel === "clear" && (
+        <motion.div variants={stagger.item}>
+          <div
+            className="rounded-2xl p-4"
+            style={{
+              background: "var(--green-tint)",
+              border: "1px solid rgba(22,163,74,0.15)",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <div className="icon-sm icon-green shrink-0">
+                <Sparkles size={13} strokeWidth={2.25} />
+              </div>
+              <p className="text-sm" style={{ fontWeight: 700, color: "var(--green-text)" }}>
+                Sve je u redu!
+              </p>
+            </div>
+            <p className="text-xs ml-9" style={{ color: "var(--text-muted)" }}>
+              Vakcinacije i pregledi su redovni za sve ljubimce.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {(statusLevel === "overdue" || statusLevel === "soon") && (
         <motion.div variants={stagger.item}>
           <div
             className="rounded-2xl p-4"
@@ -323,10 +358,12 @@ export default function OwnerHomePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-sm" style={{ fontWeight: 700 }}>
-                  {hasOverdue ? "Treba zakazati termin" : "Uskoro ističe"}
+                  {hasOverdue ? "Termin kasni — zakažite što pre" : "Termin uskoro ističe"}
                 </h2>
                 <p className="text-[11px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  Vakcinacije i pregledi za koje još nije zakazan termin.
+                  {hasOverdue
+                    ? "Vakcinacija ili pregled je prošao rok, a termin još nije zakazan."
+                    : "Vakcinacije i pregledi za koje još nije zakazan termin."}
                 </p>
               </div>
             </div>
@@ -529,31 +566,6 @@ export default function OwnerHomePage() {
           </div>
         )}
       </motion.div>
-
-      {/* ── All clear: dates are tracked and nothing needs booking ── */}
-      {allClear && (
-        <motion.div variants={stagger.item}>
-          <div
-            className="rounded-2xl p-4"
-            style={{
-              background: "var(--green-tint)",
-              border: "1px solid rgba(22,163,74,0.15)",
-            }}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <div className="icon-sm icon-green shrink-0">
-                <Sparkles size={13} strokeWidth={2.25} />
-              </div>
-              <p className="text-sm" style={{ fontWeight: 700, color: "var(--green-text)" }}>
-                Sve je u redu!
-              </p>
-            </div>
-            <p className="text-xs ml-9" style={{ color: "var(--text-muted)" }}>
-              Vakcinacije i pregledi su redovni za sve ljubimce.
-            </p>
-          </div>
-        </motion.div>
-      )}
 
       {/* ── Pet cards grid ── */}
       <motion.div variants={stagger.item} className="space-y-3">
