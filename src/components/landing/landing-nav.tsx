@@ -40,6 +40,7 @@ export default function LandingNav() {
         <nav className="hidden md:flex items-center gap-8">
           {[
             ['Funkcije', '#funkcije'],
+            ['Kako počinjete', '#proces'],
             ['Cene', '#cene'],
           ].map(([label, href]) => (
             <a
@@ -64,7 +65,7 @@ export default function LandingNav() {
           >
             Prijavi se
           </Link>
-          <a href="https://wa.me/381631012474" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm px-5 py-2">
+          <a href="https://wa.me/381637871117" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm px-5 py-2">
             Kontaktirajte nas
           </a>
         </div>
@@ -91,6 +92,7 @@ export default function LandingNav() {
         >
           {[
             ['Funkcije', '#funkcije'],
+            ['Kako počinjete', '#proces'],
             ['Cene', '#cene'],
           ].map(([label, href]) => (
             <a
@@ -111,8 +113,8 @@ export default function LandingNav() {
             >
               Prijavi se
             </Link>
-            <a href="https://wa.me/381631012474" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm justify-center">
-              Počni besplatno
+            <a href="https://wa.me/381637871117" target="_blank" rel="noopener noreferrer" className="btn-primary text-sm justify-center">
+              Kontaktirajte nas
             </a>
           </div>
         </div>
